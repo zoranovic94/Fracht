@@ -522,7 +522,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.4 (24.11.)';
+  const APP_VERSION = '4.5 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -885,7 +885,7 @@ function angeboteAus(ereignisse) {
     for (const a of l.slice().reverse()) {
       let p = (a.punkte || []).find((x) => x.typ === 'L');
       const genau = !!p;
-      if (!p) p = await ortSuchen(a.start);
+      if (!p) p = await ortSuchen(a.start, 'start');
       if (lauf !== uebLauf) return;
       if (!p) { ohne++; continue; }
       const st = (a.punkte || []).find((x) => x.typ === 'A'); if (st) lkw[st.lat.toFixed(3) + ',' + st.lon.toFixed(3)] = st;
@@ -1075,25 +1075,50 @@ function angeboteAus(ereignisse) {
     });
     return leafletProm;
   }
-  async function ortSuchen(name) {
+  // Ort ohne Koordinaten nachschlagen (ältere Meldungen). Viele Ortsnamen gibt es mehrfach (z. B. Kerpen bei Köln und
+  // Kerpen in der Eifel): Für die Ladestelle nimmt die App den Ort, der am nächsten an Duisburg liegt (deine Suche geht
+  // ja um Duisburg herum), fürs Ziel die größte Stadt mit dem Namen.
+  const HEIM = { lat: 51.4344, lon: 6.7623 };
+  try { Object.keys(localStorage).filter((k) => /^fw_geo_/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
+  const kmZwischen = (a, b) => { const r = Math.PI / 180, x = (b.lon - a.lon) * r * Math.cos((a.lat + b.lat) / 2 * r), y = (b.lat - a.lat) * r; return Math.sqrt(x * x + y * y) * 6371; };
+  // Eingebaute Koordinaten der üblichen Ladeorte rund um Duisburg (schnell, ohne Internet, ohne Verwechslung)
+  const LADEORTE = {"Alpen":[51.5767,6.5129],"Altena":[51.299,7.6735],"Ascheberg":[51.7887,7.6197],"Bedburg":[50.9972,6.5768],"Bergheim":[51.4126,6.6908],"Bergisch Gladbach":[50.9929,7.1277],"Bergkamen":[51.6149,7.6363],"Billerbeck":[51.9774,7.2909],"Bocholt":[51.8383,6.6149],"Bochum":[51.4818,7.2197],"Borken":[51.8445,6.8583],"Bottrop":[51.5216,6.9292],"Brüggen":[51.2431,6.1812],"Bönen":[51.5981,7.7589],"Castrop-Rauxel":[51.5646,7.3106],"Coesfeld":[51.9459,7.1691],"Datteln":[51.6515,7.3386],"Dinslaken":[51.5624,6.7345],"Dormagen":[51.0934,6.8416],"Dorsten":[51.6604,6.9647],"Dortmund":[51.5142,7.4653],"Duisburg":[51.435,6.7596],"Dülmen":[51.8284,7.2791],"Düsseldorf":[51.2254,6.7763],"Elsdorf":[50.9653,6.532],"Emmerich am Rhein":[51.8322,6.2428],"Ennepetal":[51.2967,7.3693],"Erkelenz":[51.081,6.3161],"Erkrath":[51.221,6.9056],"Essen":[51.4582,7.0158],"Frechen":[50.9096,6.8082],"Geilenkirchen":[50.9636,6.12],"Geldern":[51.517,6.3228],"Gelsenkirchen":[51.511,7.096],"Gescher":[51.9569,7.0039],"Gladbeck":[51.5719,6.9877],"Goch":[51.6756,6.1593],"Grefrath":[51.1725,6.6338],"Grevenbroich":[51.0906,6.5835],"Haan":[51.1955,7.0085],"Hagen":[51.3583,7.4733],"Haltern am See":[51.7431,7.1872],"Hamm":[51.2036,6.7388],"Hamminkeln":[51.7307,6.5909],"Hattingen":[51.4007,7.1862],"Heiligenhaus":[51.3266,6.971],"Heinsberg":[51.0654,6.0984],"Hemer":[51.3854,7.7662],"Herdecke":[51.4069,7.4278],"Herne":[51.538,7.22],"Herten":[51.5942,7.1368],"Hilden":[51.1674,6.9307],"Hückelhoven":[51.0552,6.2247],"Hückeswagen":[51.1505,7.3414],"Hünxe":[51.6415,6.766],"Hürth":[50.8807,6.8766],"Iserlohn":[51.3747,7.7],"Isselburg":[51.8344,6.4614],"Issum":[51.5347,6.4245],"Jüchen":[51.1017,6.5037],"Kamen":[51.5918,7.6617],"Kamp-Lintfort":[51.5018,6.5479],"Kempen":[51.3642,6.4195],"Kerken":[51.4534,6.3909],"Kerpen":[50.8696,6.6947],"Kevelaer":[51.5803,6.2456],"Kirchhellen":[51.6037,6.9201],"Kleve":[51.7896,6.1376],"Korschenbroich":[51.1903,6.5144],"Krefeld":[51.3331,6.5623],"Köln":[50.9384,6.96],"LEVERKUSEN":[51.1729,7.2651],"Langenfeld":[51.1009,6.9459],"Leverkusen":[51.1729,7.2651],"Lindlar":[51.0186,7.378],"Lüdenscheid":[51.2181,7.6397],"Lüdinghausen":[51.7718,7.4446],"Lünen":[51.6142,7.5228],"Marl":[51.6486,7.0829],"Meerbusch":[51.4897,6.6776],"Menden":[51.4042,6.8991],"Mettmann":[51.2528,6.9778],"Moers":[51.4513,6.6284],"Monheim am Rhein":[51.0909,6.8812],"Mönchengladbach":[51.1947,6.4354],"Mülheim an der Ruhr":[51.4273,6.8829],"Nettetal":[51.3155,6.2714],"Neukirchen-Vluyn":[51.4414,6.5468],"Neuss":[51.1982,6.6916],"Nordkirchen":[51.738,7.5252],"Oberhausen":[51.4696,6.8514],"Oer-Erkenschwick":[51.6399,7.2606],"Olfen":[51.7076,7.3788],"Pulheim":[50.998,6.8025],"Radevormwald":[51.2029,7.3571],"Raesfeld":[51.7694,6.8382],"Ratingen":[51.2973,6.8494],"Recklinghausen":[51.6144,7.1979],"Rees":[51.7581,6.3957],"Reken":[51.8311,7.0442],"Remscheid":[51.1799,7.1944],"Rhede":[51.8363,6.6961],"Rheinberg":[51.5459,6.6014],"Schermbeck":[51.6926,6.8702],"Schwelm":[51.2841,7.2925],"Schwerte":[51.4455,7.5675],"Selm":[51.7006,7.4686],"Senden":[51.855,7.4883],"Solingen":[51.1722,7.0846],"Sonsbeck":[51.6094,6.376],"Sprockhövel":[51.3667,7.2486],"Stadtlohn":[51.9928,6.9173],"Straelen":[51.4439,6.2694],"Tönisvorst":[51.3167,6.45],"Uedem":[51.6686,6.2736],"Unna":[51.5349,7.689],"Velbert":[51.3407,7.044],"Velen":[51.8957,6.9839],"Viersen":[51.2562,6.3905],"Voerde":[51.5975,6.6812],"Vreden":[52.0359,6.8236],"Wachtendonk":[51.4065,6.3353],"Waltrop":[51.6237,7.401],"Wassenberg":[51.1007,6.1561],"Wermelskirchen":[51.1406,7.2157],"Werne":[51.4884,7.3053],"Wesel":[51.6577,6.6171],"Wetter":[52.2144,8.4067],"Willich":[51.2641,6.5447],"Wipperfürth":[51.1155,7.3879],"Witten":[51.437,7.3351],"Wuppertal":[51.264,7.178],"Wülfrath":[51.2819,7.0328],"Xanten":[51.6615,6.4543],"Gevelsberg":[51.3196,7.3386]};
+  const ORTSRANG = { city: 0, town: 1, municipality: 2, village: 3, suburb: 4, borough: 4, hamlet: 5, locality: 6 };
+  async function ortSuchen(name, rolle) {
     const key = String(name || '').trim();
     if (!key) return null;
-    if (geoCache[key] !== undefined) return geoCache[key];
-    const gemerkt = lies('geo_' + key, '');
-    if (gemerkt) { try { return (geoCache[key] = JSON.parse(gemerkt)); } catch (e) { /* neu suchen */ } }
+    const ck = (rolle === 'start' ? 's|' : 'z|') + key;
+    if (geoCache[ck] !== undefined) return geoCache[ck];
+    if (rolle === 'start' && LADEORTE[key]) return (geoCache[ck] = { lat: LADEORTE[key][0], lon: LADEORTE[key][1] });
+    const gemerkt = lies('geo2_' + ck, '');
+    if (gemerkt) { try { return (geoCache[ck] = JSON.parse(gemerkt)); } catch (e) { /* neu suchen */ } }
     try {
-      const r = await fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(key) + '&limit=5&lang=de&osm_tag=place');
-      const j = await r.json();
-      const f = (j.features || []).find((x) => x.properties && x.properties.countrycode === 'DE') || (j.features || [])[0];
-      const erg = f ? { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] } : null;
-      geoCache[key] = erg; if (erg) schreib('geo_' + key, JSON.stringify(erg));
+      // Die Ortssuche hakt manchmal: bis zu dreimal versuchen
+      let j = null;
+      for (let v = 0; v < 3 && !j; v++) {
+        try { const r = await fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(key) + '&limit=10&lang=de&osm_tag=place'); if (r.ok) j = await r.json(); } catch (e) { /* nochmal */ }
+        if (!j) await new Promise((ok) => setTimeout(ok, 1500));
+      }
+      if (!j) return null;
+      const norm = (t) => String(t || '').toLowerCase().replace(/[^a-zäöüß]/g, '');
+      let kand = (j.features || []).filter((x) => x.properties && x.properties.countrycode === 'DE').map((x) => ({
+        lat: x.geometry.coordinates[1], lon: x.geometry.coordinates[0], rang: ORTSRANG[x.properties.osm_value] ?? 7, gleich: norm(x.properties.name) === norm(key) }));
+      if (kand.some((x) => x.gleich)) kand = kand.filter((x) => x.gleich);
+      kand.forEach((x) => { x.km = kmZwischen(HEIM, x); });
+      if (rolle === 'start') {
+        const nah = kand.filter((x) => x.km <= 150).sort((x, y) => x.km - y.km);
+        kand = nah.length ? nah : kand.sort((x, y) => x.rang - y.rang || x.km - y.km);
+      } else kand.sort((x, y) => x.rang - y.rang || x.km - y.km);
+      const f = kand[0] || null;
+      const erg = f ? { lat: f.lat, lon: f.lon } : null;
+      geoCache[ck] = erg; if (erg) schreib('geo2_' + ck, JSON.stringify(erg));
       return erg;
     } catch (e) { return null; }
   }
   async function punkteVon(a) {
     if (a.punkte && a.punkte.some((p) => p.typ !== 'A')) return a.punkte;
     // ältere Meldung ohne Koordinaten: Start- und Zielort nachschlagen
-    const [s, z] = await Promise.all([ortSuchen(a.start), ortSuchen(a.ziel)]);
+    const [s, z] = await Promise.all([ortSuchen(a.start, 'start'), ortSuchen(a.ziel, 'ziel')]);
     return [s ? Object.assign({ typ: 'L' }, s) : null, z ? Object.assign({ typ: 'E' }, z) : null].filter(Boolean);
   }
   async function strasse(punkte) {
