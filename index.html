@@ -313,7 +313,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '2.7 (24.11.)';
+  const APP_VERSION = '2.8 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -506,17 +506,25 @@ function angeboteAus(ereignisse) {
     const t = h('div', { class: 'toast', role: 'status', text: text });
     document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
   }
-  const REITER = [['alle', 'Alle'], ['lalie', '☀️ Heute La-Lie'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
+  const REITER = [['alle', 'Alle'], ['lalie', '☀️ Heute La-Lie'], ['mlalie', '🌅 Morgen La-Lie'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
+  // La-Lie an einem Tag (0 = heute, 1 = morgen): an dem Tag laden und bis 5 Uhr am Morgen danach abgeladen
+  function laLieAm(a, plus) {
+    if (!a.ladenAb || !a.ende) return null;
+    const tag0 = new Date(); tag0.setHours(0, 0, 0, 0); tag0.setDate(tag0.getDate() + plus);
+    const naechster0 = new Date(tag0); naechster0.setDate(naechster0.getDate() + 1);
+    return a.ladenAb >= tag0.getTime() && a.ladenAb < naechster0.getTime() && a.ende <= naechster0.getTime() + 5 * 36e5;
+  }
+  // Morgen La-Lie: morgen laden und spätestens bis 5 Uhr übermorgen früh abgeladen
+  const istMorgenLaLie = (a) => laLieAm(a, 1) === true;
   // Heute La-Lie: heute laden und spätestens bis 5 Uhr morgen früh abladen können (Entladefenster öffnet bis dahin)
   function istLaLie(a) {
-    const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
-    const morgen5 = heute0.getTime() + 864e5 + 5 * 36e5;
     // Neue Meldungen: Ankunft an der Ladestelle und Ende der Entladung, wie der Wächter sie berechnet hat
-    if (a.ladenAb && a.ende) return a.ladenAb >= heute0.getTime() && a.ladenAb < heute0.getTime() + 864e5 && a.ende <= morgen5;
+    const r = laLieAm(a, 0);
+    if (r !== null) return r;
     // Ältere Meldungen: nach der Art der Tour (☀️ heute leer, 🌙 Nacht, 🔁 Nacht und zurück)
     return a.art === 'Heute leer' || a.art === 'Nacht' || a.art === 'Nacht und zurück';
   }
-  const imReiter = (k) => (k === 'alle' ? angebote : k === 'lalie' ? angebote.filter(istLaLie) : angebote.filter((a) => a.kanal === k));
+  const imReiter = (k) => (k === 'alle' ? angebote : k === 'lalie' ? angebote.filter(istLaLie) : k === 'mlalie' ? angebote.filter(istMorgenLaLie) : angebote.filter((a) => a.kanal === k));
   $('sortierung').value = sortierung;
   $('sortierung').addEventListener('change', (e) => { sortierung = e.target.value; schreib('sort', sortierung); zeigeListe(); });
 
@@ -571,7 +579,7 @@ function angeboteAus(ereignisse) {
   function zeigeListe() {
     const l = sortiere(imReiter(reiter));
     const box = $('liste'); box.textContent = '';
-    if (!l.length) box.appendChild(h('div', { class: 'leer', text: reiter === 'lalie' ? 'Gerade keine Tour, die heute geladen und bis 5 Uhr morgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
+    if (!l.length) box.appendChild(h('div', { class: 'leer', text: reiter === 'lalie' ? 'Gerade keine Tour, die heute geladen und bis 5 Uhr morgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : reiter === 'mlalie' ? 'Gerade keine Tour, die morgen geladen und bis 5 Uhr übermorgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
     // Was seit deinem letzten Blick reingekommen ist, steht immer oben – die neueste zuerst
     const frisch = l.filter(istNeu).sort((x, y) => y.zeit - x.zeit);
     const rest = l.filter((a) => !istNeu(a));
