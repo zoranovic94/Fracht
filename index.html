@@ -226,6 +226,8 @@ function fensterAus(text, basis) {
   const m = /^(heute|morgen|\d{1,2}\.\d{1,2}\.)(?:\s+–\s+(heute|morgen|\d{1,2}\.\d{1,2}\.))?,?\s*(\d{2}:\d{2})?(?:–(\d{2}:\d{2}))?/.exec(t);
   if (!m) return { von: null, bis: null, uhr: t };
   const von = datumAus(m[1], basis), bis = m[2] ? datumAus(m[2], basis) : von;
+  // „ohne Uhrzeit“ (neu) bzw. „00:00 Uhr“ (ältere Meldungen): im Angebot steht keine Zeit
+  if (/ohne Uhrzeit/.test(t) || (m[3] === '00:00' && !m[4])) return { von, bis, uhr: 'ohne Zeit', unklar: true };
   return { von, bis, uhr: m[3] ? m[3] + (m[4] ? '–' + m[4] : ' Uhr') : '' };
 }
 function parseMeldung(msg) {
@@ -316,7 +318,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '2.9 (24.11.)';
+  const APP_VERSION = '3.0 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -531,7 +533,10 @@ function angeboteAus(ereignisse) {
   }
   const REITER = [['alle', 'Alle'], ['lalie', '☀️ Heute La-Lie'], ['mlalie', '🌅 Morgen La-Lie'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
   // La-Lie an einem Tag (0 = heute, 1 = morgen): an dem Tag laden und bis 5 Uhr am Morgen danach abgeladen
+  // Lade- oder Entladezeit nicht angegeben → nie La-Lie (man weiß nicht, wann man fertig ist)
+  const zeitUnklar = (a) => !!((a.laden && a.laden.unklar) || (a.entladen && a.entladen.unklar));
   function laLieAm(a, plus) {
+    if (zeitUnklar(a)) return false;
     if (!a.ladenAb || !a.ende) return null;
     const tag0 = new Date(); tag0.setHours(0, 0, 0, 0); tag0.setDate(tag0.getDate() + plus);
     const naechster0 = new Date(tag0); naechster0.setDate(naechster0.getDate() + 1);
