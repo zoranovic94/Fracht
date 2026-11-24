@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#34506b">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+<title>Fracht-Wächter mobil</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: App-Leiste + Reiter oben (fest), darunter eine Frachtliste wie die Timocom-Tabelle (2 Zeilen je Angebot), Antippen öffnet die Detailseite */
+:root {
+  --bg: #e9edf2;
+  --surface: #ffffff;
+  --head: #34506b;
+  --head-fg: #ffffff;
+  --fg: #18222d;
+  --muted: #5b6876;
+  --line: #d3dae2;
+  --accent: #c8102e;
+  --link: #1f5f9e;
+  --gold-bg: #fff1c2; --gold: #a37700;
+  --gruen-bg: #dcf2e1; --gruen: #2e7d32;
+  --gelb-bg: #fff6d3; --gelb: #b98900;
+  --rot-bg: #fde3da; --rot: #c2410c;
+  --anfrage-bg: #e1ecfa; --anfrage: #1c64c4;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10161d; --surface: #18212b; --head: #243a50; --head-fg: #f1f5f9; --fg: #e5ebf1; --muted: #98a6b5; --line: #2a3846;
+    --accent: #ef4d63; --link: #7fb3ec;
+    --gold-bg: #3a3112; --gold: #f2c94c; --gruen-bg: #17321e; --gruen: #6fcf7f; --gelb-bg: #36300f; --gelb: #ecc94b;
+    --rot-bg: #3a1e14; --rot: #fb8a5a; --anfrage-bg: #142a45; --anfrage: #78aef0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10161d; --surface: #18212b; --head: #243a50; --head-fg: #f1f5f9; --fg: #e5ebf1; --muted: #98a6b5; --line: #2a3846;
+  --accent: #ef4d63; --link: #7fb3ec;
+  --gold-bg: #3a3112; --gold: #f2c94c; --gruen-bg: #17321e; --gruen: #6fcf7f; --gelb-bg: #36300f; --gelb: #ecc94b;
+  --rot-bg: #3a1e14; --rot: #fb8a5a; --anfrage-bg: #142a45; --anfrage: #78aef0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body { color: var(--fg); font-family: var(--font); font-size: 14px; -webkit-text-size-adjust: 100%; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--head); }
+button { font: inherit; color: inherit; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* App-Leiste */
+.kopf { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--head); color: var(--head-fg);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px 0; }
+.kopf-zeile { display: flex; align-items: center; gap: 10px; }
+.marke { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; letter-spacing: .01em; }
+.marke i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(255,255,255,.18); }
+.stand { margin-left: auto; font-size: 12px; opacity: .85; text-align: right; line-height: 1.25; }
+.ikon { border: 0; background: rgba(255,255,255,.12); color: var(--head-fg); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 17px; }
+.ikon:focus-visible, .reiter button:focus-visible, .zeile:focus-visible, .knopf:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reiter { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+.reiter button { border: 0; background: transparent; color: var(--head-fg); opacity: .75; padding: 9px 10px 10px; font-size: 13px; font-weight: 600;
+  border-bottom: 3px solid transparent; white-space: nowrap; cursor: pointer; }
+.reiter button[aria-selected="true"] { opacity: 1; border-bottom-color: var(--head-fg); }
+.reiter b { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 10px; background: rgba(255,255,255,.2); font-size: 11px; line-height: 18px; }
+
+/* Leiste über der Tabelle */
+.werkzeug { display: flex; align-items: center; gap: 8px; padding-block: 10px 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.werkzeug label { font-size: 12px; color: var(--muted); }
+.werkzeug select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); }
+.hinweis { margin-left: auto; font-size: 12px; color: var(--muted); }
+.beispiel { margin: 0 max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); padding: 8px 10px; border-radius: 6px;
+  background: var(--anfrage-bg); color: var(--fg); font-size: 12.5px; line-height: 1.4; }
+
+/* Tabelle wie in Timocom */
+.tabelle { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.spalten, .zeile { display: grid; grid-template-columns: 6px minmax(0, 1fr) 14px minmax(0, 1fr) 40px 74px; column-gap: 6px; align-items: start;
+  padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+.spalten { background: var(--head); color: var(--head-fg); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding-block: 7px; opacity: .92; }
+.spalten span:last-child, .zeile .c-preis { text-align: right; }
+.spalten .c-km, .zeile .c-km { text-align: right; }
+.zeile { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); text-align: left; padding-block: 9px; cursor: pointer; }
+.zeile:last-child { border-bottom: 0; }
+.zeile > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.zeile b { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zeile .c-ort b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+.zeile .c-ort span { font-variant-numeric: tabular-nums; white-space: normal; line-height: 1.3; }
+.zeile .c-ort span.heute { color: var(--accent); font-weight: 600; }
+.zeile .c-ort .uhr { font-style: normal; white-space: nowrap; display: inline-block; }
+.zeile .pfeil { color: var(--muted); font-size: 14px; line-height: 1.25; text-align: center; }
+.zeile span span, .zeile small { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zeile small { grid-column: 2 / 7; margin-top: 3px; }
+.streifen { align-self: stretch; margin-block: -9px; }
+.f-gold { background: var(--gold-bg); } .f-gold .streifen { background: var(--gold); }
+.f-gruen { background: var(--gruen-bg); } .f-gruen .streifen { background: var(--gruen); }
+.f-gelb { background: var(--gelb-bg); } .f-gelb .streifen { background: var(--gelb); }
+.f-rot { background: var(--rot-bg); } .f-rot .streifen { background: var(--rot); }
+.f-anfrage { background: var(--anfrage-bg); } .f-anfrage .streifen { background: var(--anfrage); }
+.prozent { font-size: 12.5px; font-weight: 600; }
+.heute { color: var(--accent); }
+.leer { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* Detailseite */
+.detail { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.d-kopf { position: sticky; top: 0; z-index: 2; background: var(--head); color: var(--head-fg); display: flex; align-items: center; gap: 10px; padding-block: 10px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.d-kopf h1 { margin: 0; font-size: 16px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-inhalt { display: flex; flex-direction: column; gap: 10px; padding-block: 12px 24px;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); max-width: 640px; margin: 0 auto; }
+.preisblock { border-radius: 8px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; }
+.preisblock .gross { font-size: 26px; font-weight: 700; }
+.preisblock .proz { font-size: 20px; font-weight: 700; text-align: right; }
+.preisblock .klein { font-size: 12.5px; color: var(--muted); }
+.preisblock .klein:last-child { text-align: right; }
+.knoepfe { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.knopf { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; padding: 6px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--link); font-weight: 600; font-size: 13px; text-decoration: none; text-align: center; }
+.knopf span { font-size: 18px; line-height: 1; }
+.knopf.aus { color: var(--muted); pointer-events: none; opacity: .55; }
+.abschnitt { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.abschnitt h2 { margin: 0; padding: 8px 12px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+  background: color-mix(in srgb, var(--head) 10%, var(--surface)); border-bottom: 1px solid var(--line); }
+.feld { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.feld:last-child { border-bottom: 0; }
+.feld dt { color: var(--muted); font-size: 12.5px; padding-top: 1px; }
+.feld dd { margin: 0; overflow-wrap: anywhere; user-select: text; }
+.stelle { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.stelle:last-child { border-bottom: 0; }
+.stelle i { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 700; background: var(--bg); }
+.stelle .ort { font-weight: 600; }
+.stelle .zeit { color: var(--muted); font-size: 13px; }
+.notiz { padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; line-height: 1.4; }
+.notiz:last-child { border-bottom: 0; }
+
+/* Einstellungen */
+.blatt { position: fixed; inset: auto 0 0 0; z-index: 50; background: var(--surface); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0;
+  box-shadow: 0 -8px 30px rgba(0,0,0,.18); padding-block: 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 10px; max-width: 640px; margin: 0 auto; }
+.blatt h2 { margin: 0; font-size: 16px; }
+.blatt p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.blatt label { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.blatt input { font: inherit; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+.blatt .reihe { display: flex; gap: 8px; justify-content: flex-end; }
+.blatt .reihe button { border: 1px solid var(--line); background: var(--surface); padding: 9px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+.blatt .reihe button.haupt { background: var(--head); color: var(--head-fg); border-color: var(--head); }
+.schleier { position: fixed; inset: 0; z-index: 45; background: rgba(0,0,0,.35); }
+@media (prefers-reduced-motion: no-preference) { .detail, .blatt { animation: rein .16s ease-out; } @keyframes rein { from { transform: translateY(12px); opacity: .6; } } }
+</style>
+
+<header class="kopf">
+  <div class="kopf-zeile">
+    <div class="marke"><i aria-hidden="true"></i>Fracht-Wächter</div>
+    <div class="stand" id="stand">Beispieldaten</div>
+    <button class="ikon" id="neu" type="button" aria-label="Aktualisieren">↻</button>
+    <button class="ikon" id="einst" type="button" aria-label="Einstellungen">⚙</button>
+  </div>
+  <nav class="reiter" role="tablist" id="reiter"></nav>
+</header>
+
+<div class="werkzeug">
+  <label for="sortierung">Sortieren</label>
+  <select id="sortierung">
+    <option value="laden">Ladedatum</option>
+    <option value="neu">Neueste zuerst</option>
+    <option value="deckung">Deckung %</option>
+    <option value="preis">Preis</option>
+    <option value="km">km</option>
+  </select>
+  <span class="hinweis" id="anzahl"></span>
+</div>
+<div class="beispiel" id="beispiel">Beispieldaten mit erfundenen Firmen. Tippe oben auf ⚙ und trag deinen Kanal ein, dann erscheinen hier deine echten Touren vom Fracht-Wächter.</div>
+
+<main class="tabelle" id="tabelle">
+  <div class="spalten" aria-hidden="true"><span></span><span>Start</span><span></span><span>Ziel</span><span class="c-km">km</span><span>Preis</span></div>
+  <div id="liste"></div>
+</main>
+
+<div id="ebene"></div>
+
+<script>
+// PARSER-START – liest die Meldungen des Fracht-Wächters (ntfy) in Angebote um
+const FARBEN = { '🥇': 'gold', '🟢': 'gruen', '🟡': 'gelb', '🔴': 'rot', '🔵': 'anfrage' };
+const FARB_NAME = { gold: 'Gold', gruen: 'sehr gut', gelb: 'geht so', rot: 'lohnt nicht', anfrage: 'Preis abklären' };
+const ARTEN = { '☀️': 'Heute leer', '🌙': 'Nacht', '🔁': 'Nacht und zurück', '🛣️': 'Fernfahrt' };
+const zahlAus = (s) => (s == null ? null : Number(String(s).replace(/\./g, '').replace(',', '.')));
+function datumAus(wort, basis) {
+  const d = new Date(basis); d.setHours(0, 0, 0, 0);
+  if (wort === 'heute') return d;
+  if (wort === 'morgen') { d.setDate(d.getDate() + 1); return d; }
+  const m = /^(\d{1,2})\.(\d{1,2})\.$/.exec(wort || '');
+  if (!m) return null;
+  const x = new Date(d.getFullYear(), Number(m[2]) - 1, Number(m[1]));
+  if (x.getTime() < d.getTime() - 180 * 864e5) x.setFullYear(x.getFullYear() + 1);
+  return x;
+}
+function fensterAus(text, basis) {
+  const t = String(text || '').replace(/\s*\(.*?\)\s*/g, ' ').trim();
+  const m = /^(heute|morgen|\d{1,2}\.\d{1,2}\.)(?:\s+–\s+(heute|morgen|\d{1,2}\.\d{1,2}\.))?,?\s*(\d{2}:\d{2})?(?:–(\d{2}:\d{2}))?/.exec(t);
+  if (!m) return { von: null, bis: null, uhr: t };
+  const von = datumAus(m[1], basis), bis = m[2] ? datumAus(m[2], basis) : von;
+  return { von, bis, uhr: m[3] ? m[3] + (m[4] ? '–' + m[4] : ' Uhr') : '' };
+}
+function parseMeldung(msg) {
+  if (!msg || msg.event !== 'message') return null;
+  const titel = String(msg.title || '');
+  const route = /·\s*([^·]+?)\s+→\s+([^·]+?)(?:\s+⚠️)?\s*$/.exec(titel);
+  if (!route || /^MUSTER/.test(titel)) return null;
+  const basis = (msg.time || 0) * 1000;
+  const a = {
+    id: msg.sequence_id || msg.id, zeit: basis, kanal: /-heute$/.test(msg.topic) ? 'heute' : /-preis$/.test(msg.topic) ? 'preis' : 'morgen',
+    start: route[1].trim(), ziel: route[2].trim(), farbe: null, art: null, preis: null, deckung: null, symbole: [],
+    laden: null, entladen: null, ladenText: '', entladenText: '', zurueck: '', tage: null,
+    leerKm: null, lastKm: null, heimKm: null, anfahrtAb: '', lm: null, t: null, stopps: null,
+    ueber: null, euroKm: null, vorher: '', zahlung: null, mindest: null, vorschlag: null,
+    firma: '', sterne: '', name: '', tel: '', mobil: '', mail: '', info: '', hinweise: [],
+    telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel)
+  };
+  const kopf = titel.slice(0, titel.indexOf(route[0]));
+  for (const k in FARBEN) if (kopf.indexOf(k) !== -1) { a.farbe = FARBEN[k]; break; }
+  for (const k in ARTEN) if (kopf.indexOf(k) !== -1) a.art = ARTEN[k];
+  if (kopf.indexOf('🏆') !== -1) a.symbole.push('🏆 Bestes heute');
+  if (kopf.indexOf('🔄') !== -1) a.symbole.push('🔄 Preis geändert');
+  if (kopf.indexOf('🤝') !== -1) a.symbole.push('🤝 Stammkunde');
+  if (kopf.indexOf('✅') !== -1) a.symbole.push('✅ passt zum Auflieger');
+  const p = /(\d[\d.]*) € \((\d+) %\)/.exec(kopf);
+  if (p) { a.preis = zahlAus(p[1]); a.deckung = Number(p[2]); }
+  if (!a.farbe) a.farbe = a.preis == null ? 'anfrage' : 'gelb';
+  for (const zeile of String(msg.message || '').split('\n')) {
+    const z = zeile.trim();
+    let m;
+    if ((m = /^🕐 Laden: (.*)$/.exec(z))) { a.ladenText = m[1]; a.laden = fensterAus(m[1], basis); }
+    else if ((m = /^🕐 Entladen: (.*)$/.exec(z))) {
+      const teile = m[1].split(' · ');
+      a.entladenText = teile[0]; a.entladen = fensterAus(teile[0], basis);
+      teile.slice(1).forEach((x) => { const r = /zurück ca\. (.*)/.exec(x); if (r) a.zurueck = r[1]; const t = /([\d,]+) Fahrertage/.exec(x); if (t) a.tage = zahlAus(t[1]); });
+    } else if ((m = /^🛣 ([\d.]+) \+ ([\d.]+)(?: \+ ([\d.]+))? km(.*)$/.exec(z))) {
+      a.leerKm = zahlAus(m[1]); a.lastKm = zahlAus(m[2]); a.heimKm = m[3] ? zahlAus(m[3]) : null;
+      m[4].split(' · ').forEach((x) => {
+        let r;
+        if ((r = /Anfahrt ab (.+?)(?: \(LKW-Route\))?(?: \((\d+) Stopps\))?$/.exec(x))) { a.anfahrtAb = r[1]; if (r[2]) a.stopps = Number(r[2]); }
+        else if ((r = /^([\d,]+) m$/.exec(x.trim()))) a.lm = zahlAus(r[1]);
+        else if ((r = /^([\d,]+) t$/.exec(x.trim()))) a.t = zahlAus(r[1]);
+      });
+    } else if (/^💶 /.test(z)) {
+      const r1 = /([+−-])([\d.]+) € (über|unter) Kosten/.exec(z); if (r1) a.ueber = (r1[1] === '+' ? 1 : -1) * zahlAus(r1[2]);
+      const r2 = /([\d,]+) €\/km/.exec(z); if (r2) a.euroKm = zahlAus(r2[1]);
+      const r3 = /vorher ([\d.]+ €|ohne Preis)/.exec(z); if (r3) a.vorher = r3[1];
+      const r4 = /Zahlung (\d+) Tage/.exec(z); if (r4) a.zahlung = Number(r4[1]);
+      const r5 = /mindestens ([\d.]+) €/.exec(z); if (r5) a.mindest = zahlAus(r5[1]);
+      const r6 = /Vorschlag ([\d.]+) €/.exec(z); if (r6) a.vorschlag = zahlAus(r6[1]);
+    } else if ((m = /^📞 (.*)$/.exec(z))) {
+      const teile = m[1].split(' · ');
+      const f = /^(.*?)\s*(?:★([\d,]+))?$/.exec(teile.shift() || ''); a.firma = f[1].trim(); a.sterne = f[2] || '';
+      teile.forEach((x) => {
+        x = x.trim();
+        if (/^mobil /.test(x)) a.mobil = x.slice(6);
+        else if (/^\+?[\d][\d\s/()-]{5,}$/.test(x)) a.tel = a.tel || x;
+        else if (!/Messenger|nicht abrufbar/.test(x)) a.name = a.name || x;
+      });
+    } else if ((m = /^✉ (.*)$/.exec(z))) a.mail = m[1].split(' · ')[0].trim();
+    else if ((m = /^ℹ (.*)$/.exec(z))) a.info = m[1];
+    else if (/^(🏠|↩|➡️|⚠️|✅)/.test(z)) a.hinweise.push(z);
+  }
+  (msg.actions || []).forEach((x) => {
+    const u = String(x.url || '');
+    if (/^tel:/.test(u) && !a.telUrl) a.telUrl = u;
+    else if (/^mailto:/.test(u)) a.mailUrl = u;
+    else if (/^https:\/\/my\.timocom\.com\//.test(u)) a.timocomUrl = u;
+  });
+  return a;
+}
+// Alle Ereignisse eines oder mehrerer Kanäle -> aktuelle Angebote (gelöschte fallen raus, Updates ersetzen)
+function angeboteAus(ereignisse) {
+  const nachId = new Map(), weg = new Set();
+  ereignisse.slice().sort((x, y) => (x.time || 0) - (y.time || 0)).forEach((e) => {
+    const sid = e.sequence_id || e.id;
+    if (e.event === 'message_delete') { weg.add(e.topic + '|' + sid); nachId.delete(e.topic + '|' + sid); return; }
+    if (e.event !== 'message') return;
+    const a = parseMeldung(e);
+    if (a && !weg.has(e.topic + '|' + sid)) nachId.set(e.topic + '|' + sid, a);
+  });
+  return Array.from(nachId.values());
+}
+// PARSER-END
+</script>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const h = (tag, attrs, ...kinder) => {
+    const el = document.createElement(tag);
+    for (const k in attrs || {}) {
+      if (k === 'class') el.className = attrs[k];
+      else if (k === 'text') el.textContent = attrs[k];
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), attrs[k]);
+      else if (attrs[k] !== null && attrs[k] !== undefined && attrs[k] !== false) el.setAttribute(k, attrs[k]);
+    }
+    kinder.flat().forEach((c) => { if (c !== null && c !== undefined && c !== false) el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return el;
+  };
+  const lies = (k, d) => { try { const v = localStorage.getItem('fw_' + k); return v === null ? d : v; } catch (e) { return d; } };
+  const schreib = (k, v) => { try { localStorage.setItem('fw_' + k, v); } catch (e) { /* egal */ } };
+  const euro = (n) => (n == null ? '' : Math.round(n).toLocaleString('de-DE') + ' €');
+  const zahl = (n, s) => (n == null ? '' : n.toLocaleString('de-DE', { maximumFractionDigits: s == null ? 1 : s }));
+  const tagKurz = (d) => {
+    if (!d) return '';
+    const h0 = new Date(); h0.setHours(0, 0, 0, 0);
+    const diff = Math.round((d - h0) / 864e5);
+    const s = String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.';
+    return diff === 0 ? 'heute' : diff === 1 ? 'morgen' : s;
+  };
+  const datumLang = (f) => {
+    if (!f || !f.von) return f && f.uhr ? f.uhr : '';
+    const wt = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const fmt = (d) => wt[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.';
+    return fmt(f.von) + (f.bis && f.bis.getTime() !== f.von.getTime() ? ' – ' + fmt(f.bis) : '') + (f.uhr ? ', ' + f.uhr : '');
+  };
+
+  // ---------- Beispieldaten im Format des Fracht-Wächters (erfundene Firmen und Nummern) ----------
+  function beispiel() {
+    const jetzt = Date.now() / 1000, K = 'beispiel';
+    const m = (min, topic, title, text, sid) => ({ event: 'message', time: jetzt - min * 60, topic: K + topic, sequence_id: sid, title, message: text.join('\n'),
+      actions: [{ url: 'tel:+492030000000' }, { url: 'mailto:dispo@beispiel-spedition.de?subject=Anfrage' }, { url: 'https://my.timocom.com/app/tccargo/freights/search/' }] });
+    return [
+      m(4, '-heute', '🟢 ☀️ 🏆 420 € (128 %) · Krefeld → Gelsenkirchen', ['🕐 Laden: heute 14:00–16:00', '🕐 Entladen: heute 17:00–19:00 · 🏠 zurück ca. 19:55', '🛣 34 + 52 + 40 km · Anfahrt ab Rheinberg (LKW-Route) · 13,6 m · 21 t', '💶 +92 € über Kosten · 3,24 €/km · Zahlung 30 Tage', '📞 Spedition Beispiel GmbH ★4,8 · Anna Muster · +49 2151 000000', '✉ dispo@beispiel-spedition.de · Knopf „E-Mail-Anfrage“ = fertiger Text', 'ℹ 33 Paletten, Getränke'], 'b1'),
+      m(11, '-heute', '🟡 ☀️ 310 € (104 %) · Moers → Bochum', ['🕐 Laden: heute 15:00–17:00', '🕐 Entladen: heute 18:00–20:00 · 🏠 zurück ca. 21:10', '🛣 12 + 48 + 52 km · Anfahrt ab Rheinberg (LKW-Route) · 13,6 m · 18 t', '💶 +12 € über Kosten · 2,77 €/km · Zahlung 45 Tage', '📞 Muster Logistik KG ★5 · Peter Probe · +49 2841 000000', 'ℹ Lademitteltausch'], 'b2'),
+      m(18, '', '🥇 🏆 980 € (152 %) · Duisburg → Hannover', ['🕐 Laden: morgen 07:00–09:00', '🕐 Entladen: morgen 14:00–16:00', '🛣 18 + 287 km · Anfahrt ab Oberhausen (LKW-Route) · 13,6 m · 24 t', '💶 +335 € über Kosten · 3,21 €/km · Zahlung 30 Tage', '↩ Rückladung Richtung Duisburg 🟢 gut · 31 Ladungen · 1,62 €/km', '📞 Nordwest Cargo GmbH ★4,9 · Jonas Beispiel · +49 511 000000', '✉ jonas@nordwest-cargo.example · Knopf „E-Mail-Anfrage“ = fertiger Text', 'ℹ Papierrollen, Kantenschutz mitbringen'], 'b3'),
+      m(26, '', '🟢 ✅ 640 € (124 %) · Dinslaken → Bremen', ['🕐 Laden: morgen 08:00–12:00', '🕐 Entladen: 26.11. 06:00–10:00', '🛣 21 + 262 km · Anfahrt ab Rheinberg (LKW-Route) · 13,6 m · 22 t', '✅ Passt: Code XL', '💶 +124 € über Kosten · 2,26 €/km · Zahlung 30 Tage', '↩ Rückladung Richtung Duisburg 🟡 mittel · 9 Ladungen · 1,41 €/km', '📞 Hanse Fracht AG ★4,6 · Lea Lorem · +49 421 000000'], 'b4'),
+      m(39, '', '🟡 🔄 520 € (101 %) · Wesel → Kassel', ['🕐 Laden: morgen 10:00–14:00', '🕐 Entladen: 26.11. 08:00–12:00', '🛣 23 + 218 km · Anfahrt ab Rheinberg (LKW-Route) · 8,4 m · 12 t', '💶 +5 € über Kosten · 2,16 €/km · vorher 480 € · Zahlung 60 Tage ⚠️', '↩ Rückladung Richtung Duisburg 🟢 gut · 18 Ladungen · 1,52 €/km', '📞 Mitte Transporte GmbH ★4,2 · Tim Test · +49 561 000000'], 'b5'),
+      m(53, '', '🟢 🛣️ 1.450 € (131 %) · Oberhausen → München', ['🕐 Laden: 26.11. 06:00–10:00', '🕐 Entladen: 27.11. 07:00–12:00 · 2 Fahrertage', '🛣 6 + 612 km · Anfahrt ab Oberhausen (LKW-Route) · 13,6 m · 24 t', '💶 +342 € über Kosten · 2,35 €/km · Zahlung 30 Tage', '↩ Rückladung Richtung Duisburg 🟢 gut · 40+ Ladungen · 1,58 €/km', '➡️ Danach: Augsburg → Köln · 1.100 € (118 %)', '📞 Süd Spedition GmbH ★5 · Max Beispiel · +49 89 000000'], 'b6'),
+      m(7, '-preis', '🔵 Preis abklären · Neuss → Hamm', ['🕐 Laden: morgen 07:00–08:00', '🕐 Entladen: morgen 12:00 Uhr', '🛣 41 + 107 km · Anfahrt ab Oberhausen (LKW-Route) · 13,6 m · 24 t', '💶 Preis abklären: mindestens 370 € · Vorschlag 450 € · Zahlung 30 Tage', '🏠 Ziel nur ca. 101 km vor Duisburg – danach leer heim, Rückladung egal', '📞 Rhein Logistik GmbH ★4,7 · Sara Probe · +49 2131 000000', 'ℹ 24 Pal., kein Tausch'], 'b7'),
+      m(22, '-preis', '🔵 ☀️ Preis abklären · Emmerich am Rhein → Wuppertal', ['🕐 Laden: heute 13:00–15:00', '🕐 Entladen: heute 16:00–18:00 · 🏠 zurück ca. 19:40', '🛣 48 + 112 + 62 km · Anfahrt ab Rheinberg (LKW-Route) · 6 m · 5 t', '💶 Preis abklären: mindestens 440 € inkl. Rückfahrt · Vorschlag 530 €', '📞 Grenzland Cargo B.V.-Niederlassung ★4,4 · Daan Muster · +49 2822 000000'], 'b8')
+    ];
+  }
+
+  // ---------- Zustand ----------
+  let angebote = [], live = false, stand = null, reiter = lies('reiter', 'alle'), sortierung = lies('sort', 'laden'), offen = null;
+  const REITER = [['alle', 'Alle'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
+  $('sortierung').value = sortierung;
+  $('sortierung').addEventListener('change', (e) => { sortierung = e.target.value; schreib('sort', sortierung); zeigeListe(); });
+
+  function sortiere(l) {
+    const ld = (a) => (a.laden && a.laden.von ? a.laden.von.getTime() : 9e15) + (a.laden && a.laden.uhr ? Number(a.laden.uhr.slice(0, 2)) * 36e5 : 0);
+    const f = {
+      laden: (x, y) => ld(x) - ld(y) || (y.deckung || 0) - (x.deckung || 0),
+      neu: (x, y) => y.zeit - x.zeit,
+      deckung: (x, y) => (y.deckung ?? -1) - (x.deckung ?? -1),
+      preis: (x, y) => (y.preis ?? -1) - (x.preis ?? -1),
+      km: (x, y) => (x.lastKm ?? 9e9) - (y.lastKm ?? 9e9)
+    }[sortierung];
+    return l.slice().sort(f);
+  }
+
+  function zeigeReiter() {
+    const box = $('reiter'); box.textContent = '';
+    REITER.forEach(([k, name]) => {
+      const n = k === 'alle' ? angebote.length : angebote.filter((a) => a.kanal === k).length;
+      box.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(reiter === k), onclick: () => { reiter = k; schreib('reiter', k); zeigeReiter(); zeigeListe(); } },
+        name, h('b', { class: 'num', text: String(n) })));
+    });
+  }
+
+  function zeile(a) {
+    const heuteL = a.laden && a.laden.von && tagKurz(a.laden.von) === 'heute';
+    // Zeitfenster wie im Angebot: von–bis (Tag und Uhrzeit)
+    // Tag und Uhrzeit getrennt: die Uhrzeit bricht nur als Ganzes in die nächste Zeile um
+    const wann = (f, cls, ersatz) => {
+      if (!f || !f.von) return h('span', { class: cls, text: ersatz || '' });
+      const tag = tagKurz(f.von) + (f.bis && f.bis.getTime() !== f.von.getTime() ? '–' + tagKurz(f.bis) : '');
+      return h('span', { class: cls }, tag + ' ', f.uhr ? h('i', { class: 'uhr', text: f.uhr.replace(' Uhr', '') }) : null);
+    };
+    const unten = [a.firma, a.lm != null ? zahl(a.lm) + ' m' : '', a.t != null ? zahl(a.t) + ' t' : '', a.art || ''].filter(Boolean).join(' · ');
+    return h('button', { class: 'zeile f-' + a.farbe, type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
+      h('span', { class: 'streifen', 'aria-hidden': 'true' }),
+      h('span', { class: 'c-ort' }, h('b', { text: a.start }), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
+      h('span', { class: 'pfeil', 'aria-hidden': 'true', text: '→' }),
+      h('span', { class: 'c-ort' }, h('b', { text: a.ziel }), wann(a.entladen, '', a.entladenText)),
+      h('span', { class: 'c-km' }, h('b', { class: 'num', text: a.lastKm != null ? zahl(a.lastKm, 0) : '–' }), h('span', { text: a.leerKm != null ? '+' + zahl(a.leerKm, 0) : '' })),
+      h('span', { class: 'c-preis' }, h('b', { class: 'num', text: a.preis != null ? euro(a.preis) : 'abklären' }),
+        h('span', { class: 'prozent num', text: a.deckung != null ? a.deckung + ' %' : (a.vorschlag ? '~' + euro(a.vorschlag) : '') })),
+      unten ? h('small', { text: unten }) : null);
+  }
+
+  function zeigeListe() {
+    const l = sortiere(reiter === 'alle' ? angebote : angebote.filter((a) => a.kanal === reiter));
+    const box = $('liste'); box.textContent = '';
+    if (!l.length) box.appendChild(h('div', { class: 'leer', text: live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
+    l.forEach((a) => box.appendChild(zeile(a)));
+    $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote');
+  }
+
+  // ---------- Detailseite wie ein Timocom-Angebot ----------
+  function oeffne(a) {
+    offen = a;
+    const eb = $('ebene'); eb.textContent = '';
+    const feld = (dt, dd) => (dd ? h('div', { class: 'feld' }, h('dt', { text: dt }), h('dd', null, dd)) : null);
+    const knopf = (sym, text, url) => h('a', { class: 'knopf' + (url ? '' : ' aus'), href: url || null, target: url && /^https:/.test(url) ? '_blank' : null, rel: 'noopener' }, h('span', { 'aria-hidden': 'true', text: sym }), text);
+    const kmText = [a.lastKm != null ? zahl(a.lastKm, 0) + ' km beladen' : '', a.leerKm != null ? zahl(a.leerKm, 0) + ' km Anfahrt' + (a.anfahrtAb ? ' ab ' + a.anfahrtAb : '') : '', a.heimKm != null ? zahl(a.heimKm, 0) + ' km heim' : ''].filter(Boolean).join(' · ');
+    const seite = h('div', { class: 'detail', role: 'dialog', 'aria-modal': 'true', 'aria-label': a.start + ' nach ' + a.ziel },
+      h('div', { class: 'd-kopf' }, h('button', { class: 'ikon', type: 'button', 'aria-label': 'Zurück zur Liste', onclick: schliesse, text: '←' }), h('h1', { text: a.start + ' › ' + a.ziel })),
+      h('div', { class: 'd-inhalt' },
+        h('div', { class: 'preisblock f-' + a.farbe },
+          h('span', { class: 'gross num', text: a.preis != null ? euro(a.preis) : 'Preis abklären' }),
+          h('span', { class: 'proz num', text: a.deckung != null ? a.deckung + ' %' : '' }),
+          h('span', { class: 'klein', text: [a.preis != null ? FARB_NAME[a.farbe] : 'ohne Preis', a.art].concat(a.symbole).filter(Boolean).join(' · ') }),
+          h('span', { class: 'klein num', text: a.ueber != null ? (a.ueber >= 0 ? '+' : '−') + euro(Math.abs(a.ueber)) + ' über Kosten' : (a.mindest ? 'mind. ' + euro(a.mindest) : '') })),
+        h('div', { class: 'knoepfe' }, knopf('📞', 'Anrufen', a.telUrl), knopf('✉', 'E-Mail-Anfrage', a.mailUrl), knopf('↗', 'In Timocom', a.timocomUrl)),
+        h('section', { class: 'abschnitt' }, h('h2', { text: 'Kontaktangaben' }),
+          feld('Unternehmen', (a.firma || '–') + (a.sterne ? '  ★ ' + a.sterne : '')), feld('Ansprechpartner', a.name), feld('Telefon', a.tel), feld('Mobil', a.mobil), feld('E-Mail', a.mail)),
+        h('section', { class: 'abschnitt' }, h('h2', { text: 'Be- und Entladestellen' }),
+          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↓' }), h('div', null, h('div', { class: 'ort', text: a.start }), h('div', { class: 'zeit', text: datumLang(a.laden) || a.ladenText }))),
+          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↑' }), h('div', null, h('div', { class: 'ort', text: a.ziel }), h('div', { class: 'zeit', text: (datumLang(a.entladen) || a.entladenText) + (a.stopps ? ' · ' + a.stopps + ' Stopps' : '') }))),
+          kmText ? h('div', { class: 'notiz', text: kmText }) : null),
+        h('section', { class: 'abschnitt' }, h('h2', { text: 'Frachtbeschreibung' }),
+          feld('Lademeter', a.lm != null ? zahl(a.lm) + ' m' : ''), feld('Gewicht', a.t != null ? zahl(a.t) + ' t' : ''), feld('Warenart / Info', a.info)),
+        h('section', { class: 'abschnitt' }, h('h2', { text: 'Frachtpreis' }),
+          feld('Preis', a.preis != null ? euro(a.preis) + (a.vorher ? ' (vorher ' + a.vorher + ')' : '') : 'abklären'),
+          feld('Vorschlag', a.preis == null && a.vorschlag ? euro(a.vorschlag) + (a.mindest ? ' · mindestens ' + euro(a.mindest) : '') : ''),
+          feld('Zahlungsziel', a.zahlung ? a.zahlung + ' Tage' : ''), feld('€ pro km', a.euroKm != null ? zahl(a.euroKm, 2) + ' €/km' : '')),
+        h('section', { class: 'abschnitt' }, h('h2', { text: 'Bewertung Fracht-Wächter' }),
+          feld('Deckung', a.deckung != null ? a.deckung + ' % · ' + FARB_NAME[a.farbe] : FARB_NAME[a.farbe]),
+          feld('Fahrertage', a.tage ? zahl(a.tage) : ''), feld('Zurück am Standort', a.zurueck),
+          a.hinweise.map((t) => h('div', { class: 'notiz', text: t })),
+          h('div', { class: 'notiz', text: 'Gemeldet ' + new Date(a.zeit).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr' }))));
+    eb.appendChild(seite);
+    seite.querySelector('.d-kopf .ikon').focus();
+  }
+  function schliesse() { offen = null; $('ebene').textContent = ''; }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { schliesse(); } });
+
+  // ---------- Einstellungen ----------
+  function einstellungen() {
+    const eb = $('ebene'); eb.textContent = '';
+    const kanal = h('input', { id: 'f-kanal', type: 'text', autocomplete: 'off', spellcheck: 'false', value: lies('kanal', ''), placeholder: 'Name des Hauptkanals' });
+    const token = h('input', { id: 'f-token', type: 'password', autocomplete: 'off', value: lies('token', ''), placeholder: 'tk_… (nur wenn Kanäle reserviert sind)' });
+    eb.appendChild(h('div', { class: 'schleier', onclick: schliesse }));
+    eb.appendChild(h('form', { class: 'blatt', onsubmit: (e) => { e.preventDefault(); schreib('kanal', kanal.value.trim()); schreib('token', token.value.trim()); schliesse(); lade(); } },
+      h('h2', { text: 'Verbindung zum Fracht-Wächter' }),
+      h('p', { text: 'Trag den Namen deines Hauptkanals ein (wie in der ntfy-App, ohne „-heute“ und „-preis“). Die Seite liest dann deine echten Meldungen und aktualisiert sich jede Minute. Ohne Kanal zeigt sie Beispieldaten.' }),
+      h('label', { for: 'f-kanal' }, 'Kanal', kanal), h('label', { for: 'f-token' }, 'Zugriffstoken (optional)', token),
+      h('div', { class: 'reihe' }, h('button', { type: 'button', onclick: schliesse, text: 'Abbrechen' }), h('button', { type: 'submit', class: 'haupt', text: 'Speichern' }))));
+    kanal.focus();
+  }
+  $('einst').addEventListener('click', einstellungen);
+  $('neu').addEventListener('click', () => lade());
+
+  // ---------- Daten laden ----------
+  async function holeKanal(topic, token) {
+    const r = await fetch('https://ntfy.sh/' + encodeURIComponent(topic) + '/json?poll=1&since=24h', { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+    if (!r.ok) throw new Error('ntfy ' + r.status);
+    return (await r.text()).split('\n').filter(Boolean).map((z) => { try { return JSON.parse(z); } catch (e) { return null; } }).filter(Boolean);
+  }
+  async function lade() {
+    const kanal = lies('kanal', ''), token = lies('token', '');
+    if (!kanal) { live = false; angebote = angeboteAus(beispiel()); stand = new Date(); return zeige('Beispieldaten'); }
+    $('stand').textContent = 'lädt …';
+    try {
+      const teile = await Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token)));
+      const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
+      live = true; stand = new Date();
+      angebote = angeboteAus(teile.flat()).filter((a) => !(a.laden && a.laden.bis && a.laden.bis < heute0)); // Ladetag schon vorbei
+      zeige('Live · ' + stand.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr');
+    } catch (e) {
+      live = false; angebote = angeboteAus(beispiel());
+      zeige('Keine Verbindung – Beispieldaten');
+    }
+  }
+  function zeige(standText) {
+    $('stand').textContent = standText;
+    $('beispiel').hidden = live;
+    zeigeReiter(); zeigeListe();
+    if (offen) { const neu = angebote.find((a) => a.id === offen.id); if (neu) oeffne(neu); }
+  }
+  // Persönlicher Link: Kanal steht hinter dem # (geht nicht an den Server) – einmal merken, dann aus der Adresse entfernen
+  try {
+    const k = decodeURIComponent((location.hash || '').slice(1));
+    if (/^[A-Za-z0-9_-]{6,64}$/.test(k)) { schreib('kanal', k); history.replaceState(null, '', location.pathname + location.search); }
+  } catch (e) { /* egal */ }
+  lade();
+  setInterval(() => { if (lies('kanal', '') && document.visibilityState === 'visible') lade(); }, 60000);
+})();
+</script>
+
+</body>
+</html>
