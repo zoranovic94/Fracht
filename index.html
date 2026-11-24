@@ -307,6 +307,12 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 .p-E span { background: #c8102e; }
 .p-A span { background: #fff; font-size: 16px; border-color: #64748b; }
 .leaflet-container { font-family: var(--font); }
+/* 4.0: keine Farbstreifen mehr – die Karte selbst zeigt die Farbe; Prozent-Schilder klar unterschiedlich */
+.tabelle .zeile .streifen { background: transparent; }
+.tabelle .zeile.f-gold .prozent { background: transparent; color: #ffd45a; box-shadow: inset 0 0 0 1.5px #ffcc33; }
+.tabelle .zeile.f-gelb .prozent { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--fg); }
+.ueberblick .chip.c-gelb { background: var(--surface); box-shadow: var(--karte-schatten); }
+.d-inhalt .preisblock.f-gelb { box-shadow: var(--karte-schatten); }
 </style>
 
 <header class="kopf">
@@ -457,7 +463,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '3.9 (24.11.)';
+  const APP_VERSION = '4.0 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
