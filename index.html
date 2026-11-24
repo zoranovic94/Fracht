@@ -304,6 +304,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
+  const APP_VERSION = '1.6 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -408,7 +409,11 @@ function angeboteAus(ereignisse) {
       return h('span', { class: cls }, tag + ' ', f.uhr ? h('i', { class: 'uhr', text: f.uhr.replace(' Uhr', '') }) : null);
     };
     const vor = Math.max(0, Math.round((Date.now() - a.zeit) / 60000));
-    const seit = a.zeit > gesehenBis ? (vor < 1 ? 'gerade eben' : vor < 60 ? 'vor ' + vor + ' Min.' : 'vor ' + Math.round(vor / 60) + ' Std.') : '';
+    // Eingang: neue mit „vor X Min.“, alle anderen mit Uhrzeit (bzw. Tag), wann der Wächter sie gemeldet hat
+    const d0 = new Date(a.zeit), heuteTag = new Date().toDateString() === d0.toDateString();
+    const uhr = String(d0.getHours()).padStart(2, '0') + ':' + String(d0.getMinutes()).padStart(2, '0');
+    const seit = a.zeit > gesehenBis ? (vor < 1 ? 'gerade eben' : vor < 60 ? 'vor ' + vor + ' Min.' : 'vor ' + Math.round(vor / 60) + ' Std.')
+      : (heuteTag ? 'seit ' + uhr : 'seit ' + String(d0.getDate()).padStart(2, '0') + '.' + String(d0.getMonth() + 1).padStart(2, '0') + '. ' + uhr);
     const unten = [seit, a.firma, a.lm != null ? zahl(a.lm) + ' m' : '', a.t != null ? zahl(a.t) + ' t' : '', a.art || ''].filter(Boolean).join(' · ');
     return h('button', { class: 'zeile f-' + a.farbe, type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
       h('span', { class: 'streifen', 'aria-hidden': 'true' }),
@@ -486,7 +491,8 @@ function angeboteAus(ereignisse) {
       h('h2', { text: 'Verbindung zum Fracht-Wächter' }),
       h('p', { text: 'Trag den Namen deines Hauptkanals ein (wie in der ntfy-App, ohne „-heute“ und „-preis“). Die Seite liest dann deine echten Meldungen und aktualisiert sich jede Minute. Ohne Kanal zeigt sie Beispieldaten.' }),
       h('label', { for: 'f-kanal' }, 'Kanal', kanal), h('label', { for: 'f-token' }, 'Zugriffstoken (optional)', token),
-      h('div', { class: 'reihe' }, h('button', { type: 'button', onclick: schliesse, text: 'Abbrechen' }), h('button', { type: 'submit', class: 'haupt', text: 'Speichern' }))));
+      h('div', { class: 'reihe' }, h('button', { type: 'button', onclick: schliesse, text: 'Abbrechen' }), h('button', { type: 'submit', class: 'haupt', text: 'Speichern' })),
+      h('p', { text: 'App-Version ' + APP_VERSION })));
     kanal.focus();
   }
   $('einst').addEventListener('click', einstellungen);
