@@ -184,6 +184,100 @@ button { font: inherit; color: inherit; }
 .blatt .reihe button.haupt { background: var(--head); color: var(--head-fg); border-color: var(--head); }
 .schleier { position: fixed; inset: 0; z-index: 45; background: rgba(0,0,0,.35); }
 @media (prefers-reduced-motion: no-preference) { .detail, .blatt { animation: rein .16s ease-out; } @keyframes rein { from { transform: translateY(12px); opacity: .6; } } }
+
+/* ===== Optik 3.7: ruhiger Hintergrund, Karten statt Tabellenzeilen, Reiter als Pillen, Live-Punkt ===== */
+:root { --bg: #edf1f6; --head: #1f3a56; --head2: #2f5c84; --karte-schatten: 0 1px 2px rgba(16,24,40,.06), 0 2px 6px rgba(16,24,40,.07); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0d1319; --head: #172a3d; --head2: #23405c; --karte-schatten: 0 1px 0 rgba(255,255,255,.04), 0 2px 8px rgba(0,0,0,.45); } }
+:root[data-theme="dark"] { --bg: #0d1319; --head: #172a3d; --head2: #23405c; --karte-schatten: 0 1px 0 rgba(255,255,255,.04), 0 2px 8px rgba(0,0,0,.45); }
+.kopf, body::before { background: linear-gradient(135deg, var(--head) 0%, var(--head2) 100%); }
+.kopf { box-shadow: 0 2px 10px rgba(16,24,40,.18); padding-block: 12px 0; }
+.marke { font-size: 18px; letter-spacing: -.01em; }
+.marke i { width: 11px; height: 11px; background: #9aa7b4; box-shadow: 0 0 0 3px rgba(255,255,255,.15); }
+body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,122,.28); }
+@media (prefers-reduced-motion: no-preference) { body.ist-live .marke i { animation: puls 2.4s ease-out infinite; }
+  @keyframes puls { 0% { box-shadow: 0 0 0 0 rgba(52,209,122,.55); } 70% { box-shadow: 0 0 0 9px rgba(52,209,122,0); } 100% { box-shadow: 0 0 0 0 rgba(52,209,122,0); } } }
+.ikon { width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.16); transition: background .15s; }
+.ikon:active { background: rgba(255,255,255,.24); }
+.reiter { gap: 6px; margin-top: 12px; padding-bottom: 12px; }
+.reiter button { border: 0; border-radius: 999px; padding: 7px 12px; background: rgba(255,255,255,.10); opacity: 1; color: rgba(255,255,255,.88); font-size: 13px; }
+.reiter button[aria-selected="true"] { background: #fff; color: var(--head); box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.reiter b { background: rgba(255,255,255,.18); color: inherit; font-weight: 700; }
+.reiter button[aria-selected="true"] b { background: var(--head); color: #fff; }
+.reiter b.hat-neu { background: var(--accent); color: #fff; }
+.werkzeug { padding-block: 12px 6px; }
+.werkzeug select { border-radius: 999px; padding: 6px 12px; font-weight: 600; box-shadow: var(--karte-schatten); border-color: transparent; }
+.tabelle { background: transparent; border: 0; padding-bottom: 12px; }
+.spalten { background: transparent; color: var(--muted); opacity: 1; font-size: 10.5px; padding-block: 2px 6px; margin-inline: 10px; }
+.zeile { margin: 0 10px 8px; width: calc(100% - 20px); border: 0; border-radius: 14px; box-shadow: var(--karte-schatten); overflow: hidden; padding-block: 11px; transition: transform .1s; }
+.zeile:last-child { border-bottom: 0; }
+.zeile:active { transform: scale(.985); }
+.streifen { margin-block: -11px; width: 6px; }
+.f-gold .streifen { width: 7px; }
+.zeile .c-ort b { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.zeile .c-preis b { font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+.f-gold .c-preis b { font-size: 17px; }
+.zeile .pfeil { color: var(--muted); opacity: .7; }
+.prozent { align-self: flex-end; display: inline-block; margin-top: 2px; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(0,0,0,.06); color: var(--fg); }
+.f-gold .prozent { background: #8a5a00; color: #fff; }
+.f-gruen .prozent { background: var(--gruen); color: #fff; }
+.f-gelb .prozent { background: color-mix(in srgb, var(--gelb) 30%, transparent); color: var(--fg); }
+.f-anfrage .prozent { background: color-mix(in srgb, var(--anfrage) 18%, transparent); color: var(--anfrage); }
+.zeile small { margin-top: 5px; padding-top: 6px; border-top: 1px dashed color-mix(in srgb, var(--muted) 30%, transparent); }
+.neu { border-radius: 999px; padding: 1px 7px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+.gruppe { margin: 0 10px 8px; border: 0; border-radius: 12px; background: var(--surface); box-shadow: var(--karte-schatten); padding: 8px 10px 8px 12px; }
+.allegesehen { border-radius: 999px; padding: 5px 10px; }
+.leer { margin: 8px 10px; border-radius: 14px; background: var(--surface); box-shadow: var(--karte-schatten); padding: 32px 18px; }
+.leer::before { content: "🚛"; display: block; font-size: 30px; margin-bottom: 8px; }
+/* Detailseite */
+.d-kopf { background: linear-gradient(135deg, var(--head) 0%, var(--head2) 100%); box-shadow: 0 2px 10px rgba(16,24,40,.18); }
+.preisblock { border-radius: 16px; padding: 16px 16px 14px; box-shadow: var(--karte-schatten); }
+.preisblock .gross { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+.preisblock .proz { font-size: 22px; font-weight: 800; }
+.knopf { border-radius: 14px; min-height: 60px; border: 0; box-shadow: var(--karte-schatten); font-size: 13.5px; }
+.knoepfe .knopf:first-child:not(.aus) { background: #1e8e4a; color: #fff; }
+.knoepfe .knopf:nth-child(2):not(.aus) { background: var(--link); color: #fff; }
+.abschnitt { border: 0; border-radius: 14px; box-shadow: var(--karte-schatten); }
+.abschnitt h2 { background: transparent; padding: 11px 12px 6px; border-bottom: 1px solid var(--line); }
+.blatt { border-radius: 18px 18px 0 0; }
+.prozent:empty { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .f-gruen .prozent { color: #0d1319; } }
+:root[data-theme="dark"] .f-gruen .prozent { color: #0d1319; }
+
+/* Optik 3.7 – Extras: Tages-Schildchen, Überblick-Leiste, Gold mit Glanz, neue Karten gleiten rein, Platzhalter beim Laden */
+.zeile .c-ort span { gap: 3px; }
+.tag { font-style: normal; font-weight: 700; font-size: 11.5px; letter-spacing: .02em; padding: 1px 7px; border-radius: 999px; display: inline-block; width: fit-content; }
+.t-heute { background: var(--accent); color: #fff; }
+.t-morgen { background: color-mix(in srgb, var(--link) 16%, transparent); color: var(--link); }
+.t-spaeter { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--muted); }
+.zeile .c-ort span.heute { color: var(--fg); font-weight: 600; }
+.zeile .c-ort .uhr { color: var(--fg); font-weight: 500; }
+.ueberblick { display: flex; gap: 6px; flex-wrap: wrap; padding-block: 0 8px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+.ueberblick[hidden] { display: none; }
+.chip { border: 0; border-radius: 999px; padding: 6px 11px; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--surface); box-shadow: var(--karte-schatten); color: var(--fg); }
+.chip b { font-weight: 800; }
+.chip.c-gold { background: var(--gold-bg); } .chip.c-gruen { background: var(--gruen-bg); } .chip.c-gelb { background: var(--gelb-bg); } .chip.c-anfrage { background: var(--anfrage-bg); }
+.chip.an { outline: 2.5px solid var(--fg); outline-offset: 1px; }
+.chip.c-alle { background: transparent; box-shadow: none; color: var(--muted); }
+/* 🥇 Gold: dunkle, edle Karte mit goldener Schrift – hebt sich klar von 🟡 (hellgelb) ab */
+.zeile.f-gold { background: linear-gradient(135deg, #18212d 0%, #2a2414 60%, #3d3010 100%); box-shadow: var(--karte-schatten), inset 0 0 0 1px rgba(255,204,51,.28); }
+.zeile.f-gold .streifen { background: linear-gradient(#ffe08a, #d9a400); }
+.zeile.f-gold .c-ort b, .zeile.f-gold .c-km b { color: #fff; }
+.zeile.f-gold .c-preis b { color: #ffd45a; }
+.zeile.f-gold .c-ort .uhr, .zeile.f-gold .pfeil, .zeile.f-gold small, .zeile.f-gold span span { color: #e9dcb4; }
+.zeile.f-gold small { border-top-color: rgba(255,255,255,.18); }
+.zeile.f-gold .prozent { background: #ffcc33; color: #2a2000; }
+.zeile.f-gold .t-morgen, .zeile.f-gold .t-spaeter { background: rgba(255,255,255,.14); color: #fff; }
+.chip.c-gold { background: #18212d; color: #ffd45a; }
+.preisblock.f-gold { background: linear-gradient(135deg, #18212d 0%, #2a2414 60%, #3d3010 100%); color: #fff; box-shadow: var(--karte-schatten), inset 0 0 0 1px rgba(255,204,51,.28); }
+.preisblock.f-gold .gross, .preisblock.f-gold .proz { color: #ffd45a; }
+.preisblock.f-gold .klein { color: #e9dcb4; }
+@media (prefers-reduced-motion: no-preference) {
+  .zeile.blink { animation: reinKarte .45s ease-out, blinken .9s ease-in-out .45s 5; }
+  @keyframes reinKarte { from { opacity: 0; transform: translateY(-8px) scale(.98); } }
+  .platzhalter { animation: schimmer 1.3s ease-in-out infinite; }
+  @keyframes schimmer { 50% { opacity: .55; } }
+}
+.platzhalter { height: 96px; background: var(--surface); }
 </style>
 
 <header class="kopf">
@@ -208,6 +302,7 @@ button { font: inherit; color: inherit; }
   </select>
   <span class="hinweis" id="anzahl"></span>
 </div>
+<div class="ueberblick" id="ueberblick" hidden></div>
 <div class="beispiel" id="beispiel">Beispieldaten mit erfundenen Firmen. Tippe oben auf ⚙ und trag deinen Kanal ein, dann erscheinen hier deine echten Touren vom Fracht-Wächter.</div>
 
 <main class="tabelle" id="tabelle">
@@ -330,7 +425,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '3.6 (24.11.)';
+  const APP_VERSION = '3.7 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -626,7 +721,7 @@ function angeboteAus(ereignisse) {
     REITER.forEach(([k, name]) => {
       const n = imReiter(k).length;
       box.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(reiter === k), onclick: () => { reiter = k; schreib('reiter3', k); zeigeReiter(); zeigeListe(); } },
-        name, h('b', { class: 'num', text: String(n) })));
+        name, h('b', { class: 'num' + (imReiter(k).some(istNeu) ? ' hat-neu' : ''), text: String(n) })));
     });
   }
 
@@ -636,8 +731,10 @@ function angeboteAus(ereignisse) {
     // Tag und Uhrzeit getrennt: die Uhrzeit bricht nur als Ganzes in die nächste Zeile um
     const wann = (f, cls, ersatz) => {
       if (!f || !f.von) return h('span', { class: cls, text: ersatz || '' });
-      const tag = tagKurz(f.von) + (f.bis && f.bis.getTime() !== f.von.getTime() ? '–' + tagKurz(f.bis) : '');
-      return h('span', { class: cls }, tag + ' ', f.uhr ? h('i', { class: 'uhr', text: f.uhr.replace(' Uhr', '') }) : null);
+      const t1 = tagKurz(f.von);
+      const tag = t1 + (f.bis && f.bis.getTime() !== f.von.getTime() ? '–' + tagKurz(f.bis) : '');
+      return h('span', { class: cls }, h('em', { class: 'tag ' + (t1 === 'heute' ? 't-heute' : t1 === 'morgen' ? 't-morgen' : 't-spaeter'), text: tag }), ' ',
+        f.uhr ? h('i', { class: 'uhr', text: f.uhr.replace(' Uhr', '') }) : null);
     };
     const vor = Math.max(0, Math.round((Date.now() - a.zeit) / 60000));
     // Eingang: neue mit „vor X Min.“, alle anderen mit Uhrzeit (bzw. Tag), wann der Wächter sie gemeldet hat
@@ -657,8 +754,26 @@ function angeboteAus(ereignisse) {
       unten ? h('small', { text: unten }) : null);
   }
 
+  // Überblick: wie viele 🥇/🟢/🟡/🔵 im Reiter – antippen zeigt nur diese Farbe, nochmal antippen zeigt wieder alle
+  let farbFilter = null;
+  function zeigeUeberblick(alle) {
+    const box = $('ueberblick'); if (!box) return;
+    box.textContent = '';
+    const arten = [['gold', '🥇', 'Gold'], ['gruen', '🟢', 'sehr gut'], ['gelb', '🟡', 'geht so'], ['anfrage', '🔵', 'Preis abklären']];
+    if (farbFilter && !alle.some((a) => a.farbe === farbFilter)) farbFilter = null;
+    arten.forEach(([f, sym, name]) => {
+      const n = alle.filter((a) => a.farbe === f).length;
+      if (!n) return;
+      box.appendChild(h('button', { type: 'button', class: 'chip c-' + f + (farbFilter === f ? ' an' : ''), 'aria-pressed': String(farbFilter === f), 'aria-label': n + ' ' + name,
+        onclick: () => { farbFilter = farbFilter === f ? null : f; zeigeListe(); } }, sym + ' ', h('b', { class: 'num', text: String(n) })));
+    });
+    if (farbFilter) box.appendChild(h('button', { type: 'button', class: 'chip c-alle', onclick: () => { farbFilter = null; zeigeListe(); }, text: '✕ alle zeigen' }));
+    box.hidden = !box.children.length;
+  }
   function zeigeListe() {
-    const l = sortiere(imReiter(reiter));
+    const alleImReiter = imReiter(reiter);
+    zeigeUeberblick(alleImReiter);
+    const l = sortiere(farbFilter ? alleImReiter.filter((a) => a.farbe === farbFilter) : alleImReiter);
     const box = $('liste'); box.textContent = '';
     if (!l.length) box.appendChild(h('div', { class: 'leer', text: reiter === 'lalie' ? 'Gerade keine Tour, die heute geladen und bis 5 Uhr morgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : reiter === 'mlalie' ? 'Gerade keine Tour, die morgen geladen und bis 5 Uhr übermorgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
     // „Beste zuerst“: eine durchgehende Liste, beste Tour ganz oben – neue sind nur mit NEU markiert
@@ -762,6 +877,7 @@ function angeboteAus(ereignisse) {
     const kanal = lies('kanal', ''), token = lies('token', '');
     if (!kanal) { live = false; angebote = angeboteAus(beispiel()); stand = new Date(); return zeige('Beispieldaten'); }
     $('stand').textContent = 'lädt …';
+    if (!live && !$('liste').children.length) { const l = $('liste'); for (let i = 0; i < 4; i++) l.appendChild(h('div', { class: 'zeile platzhalter', 'aria-hidden': 'true' })); }
     try {
       const teile = await Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token)));
       const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
@@ -786,6 +902,7 @@ function angeboteAus(ereignisse) {
   }
   function zeige(standText) {
     $('stand').textContent = standText;
+    document.body.classList.toggle('ist-live', !!live);
     $('beispiel').hidden = live;
     zeigeReiter(); zeigeListe();
     if (zielTour) {
