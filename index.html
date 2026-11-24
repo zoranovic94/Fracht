@@ -313,7 +313,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '2.4 (24.11.)';
+  const APP_VERSION = '2.5 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -418,7 +418,9 @@ function angeboteAus(ereignisse) {
     hupe3: { name: 'LKW-Hupe 3× kurz (tief)', noten: [0, .36, .72].flatMap((d) => [[196, d, .24], [247, d, .24]]), form: 'sawtooth', laut: .24 },
     alarm: { name: 'Alarm (lang, laut)', noten: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => [i % 2 ? 900 : 1250, i * .2, .18]), form: 'square', laut: .3 }
   };
-  let tonArt = lies('tonArt', 'dreiklang');
+  let tonArt = lies('tonArt', 'glocke');
+  // Einmalig umstellen: normale Touren klingen ab 2.5 mit der Glocke (danach frei wählbar)
+  if (lies('tonGlocke25', '') !== '1') { tonArt = 'glocke'; schreib('tonArt', tonArt); schreib('tonGlocke25', '1'); }
   let tonArtLaLie = lies('tonArtLaLie', 'hupe3'); // eigener Ton für „Heute La-Lie“-Touren
   function spiele(art) {
     if (!audio || audio.state !== 'running') return;
