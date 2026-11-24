@@ -524,7 +524,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.6 (24.11.)';
+  const APP_VERSION = '4.7 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -622,7 +622,7 @@ function angeboteAus(ereignisse) {
     alarm.appendChild(h('div', { class: 'alarm-kopf' }, liste.length === 1 ? 'Diese Tour hat geklingelt' : liste.length + ' Touren haben geklingelt',
       h('button', { type: 'button', 'aria-label': 'Schließen', text: '✕', onclick: () => { klingelIds.clear(); zeigeAlarm(); zeigeListe(); } })));
     liste.slice(0, 3).forEach((a) => alarm.appendChild(h('button', { type: 'button', class: 'alarm-tour', onclick: () => oeffne(a) },
-      (istLaLie(a) ? '🚛 Heute La-Lie · ' : '🌅 Morgen La-Lie · ') + a.start + ' → ' + a.ziel + '  ›',
+      (istLaLie(a) ? '🚛 Heute La-Lie · ' : istMorgenLaLie(a) ? '🌅 Morgen La-Lie · ' : '🥇 Gold · ') + a.start + ' → ' + a.ziel + '  ›',
       h('small', { text: (a.preis != null ? euro(a.preis) + (a.deckung != null ? ' (' + a.deckung + ' %)' : '') : 'Preis abklären') +
         (a.ladenText ? ' · Laden ' + a.ladenText : '') + (a.firma ? ' · ' + a.firma : '') }))));
   }
@@ -716,7 +716,7 @@ function angeboteAus(ereignisse) {
   document.addEventListener('pointerdown', () => { if (tonAn) { audioFreischalten(); bildschirmAn(); } }, { passive: true });
   $('ton').addEventListener('click', () => {
     tonAn = !tonAn; schreib('ton', tonAn ? '1' : '0'); tonKnopf();
-    if (tonAn) { audioFreischalten(); bildschirmAn(); letzterHerzschlag = 0; herzschlag(); setTimeout(gong, 120); hinweis('Ton an: Solange die App offen ist, meldet sie sich bei neuen La-Lie-Touren (heute und morgen) und ntfy bleibt still. Andere Touren kommen still mit NEU. Der Bildschirm bleibt dabei an.'); }
+    if (tonAn) { audioFreischalten(); bildschirmAn(); letzterHerzschlag = 0; herzschlag(); setTimeout(gong, 120); hinweis('Ton an: Solange die App offen ist, meldet sie sich bei neuen La-Lie-Touren (heute und morgen) und bei 🥇 Gold und ntfy bleibt still. Andere Touren kommen still mit NEU. Der Bildschirm bleibt dabei an.'); }
     else { if (wachHalten) wachHalten.release(); zuMelden(); hinweis('Ton aus.'); }
     tonSperreZeigen();
   });
@@ -1211,7 +1211,7 @@ function angeboteAus(ereignisse) {
     eb.appendChild(h('div', { class: 'schleier', onclick: schliesse }));
     eb.appendChild(h('form', { class: 'blatt', onsubmit: (e) => { e.preventDefault(); schreib('kanal', kanal.value.trim()); schreib('token', token.value.trim()); schliesse(); lade(); } },
       h('h2', { text: 'Einstellungen' }),
-      h('label', { for: 'f-ton' }, 'Ton für 🌅 Morgen La-Lie (wenn die App offen ist)',
+      h('label', { for: 'f-ton' }, 'Ton für 🌅 Morgen La-Lie und 🥇 Gold (wenn die App offen ist)',
         h('div', { style: 'display:flex;gap:8px' }, tonWahl, h('button', { type: 'button', class: 'probe', onclick: () => { audioFreischalten(); setTimeout(() => spiele(tonWahl.value), 80); }, text: '▶ Anhören' }))),
       h('label', { for: 'f-ton2' }, 'Ton für ☀️ Heute La-Lie',
         h('div', { style: 'display:flex;gap:8px' }, tonWahl2, h('button', { type: 'button', class: 'probe', onclick: () => { audioFreischalten(); setTimeout(() => spiele(tonWahl2.value), 80); }, text: '▶ Anhören' }))),
@@ -1342,7 +1342,8 @@ function angeboteAus(ereignisse) {
       const frischDa = warLive ? angebote.filter((a) => !vorher.has(a.id) && istNeu(a)) : [];
       blinkIds = new Set(frischDa.map((a) => a.id));
       // Ton nur bei La-Lie: ☀️ Heute La-Lie (LKW-Signal) und 🌅 Morgen La-Lie (Hinweiston) – alles andere kommt still mit NEU
-      const mitTon = frischDa.filter((a) => istLaLie(a) || istMorgenLaLie(a));
+      // dazu 🥇 Gold, egal für welchen Tag (Hinweiston)
+      const mitTon = frischDa.filter((a) => istLaLie(a) || istMorgenLaLie(a) || a.farbe === 'gold');
       if (mitTon.length && document.visibilityState === 'visible' && Date.now() - letzteSichtbareLadung < 120000) gong(mitTon.some(istLaLie));
       // Welche Tour hat geklingelt? Unten als Leiste zeigen und in der Liste markieren, bis du sie öffnest
       mitTon.forEach((a) => klingelIds.add(a.id));
