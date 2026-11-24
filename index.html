@@ -512,7 +512,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.2 (24.11.)';
+  const APP_VERSION = '4.3 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -966,7 +966,7 @@ function angeboteAus(ereignisse) {
     const l = sortiere(farbFilter ? alleImReiter.filter((a) => a.farbe === farbFilter) : alleImReiter);
     if (kartenAnsicht) { $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote'); zeigeUebersicht(l); return; }
     const box = $('liste'); box.textContent = '';
-    if (live && new Date().getHours() >= 17 && lies('rbGesehen', '') !== tagKey() && Object.keys(tagLesen()).length) {
+    if (live && new Date().getHours() >= 18 && lies('rbGesehen', '') !== tagKey() && Object.keys(tagLesen()).length) {
       box.appendChild(h('div', { class: 'gruppe rb-hinweis' },
         h('button', { type: 'button', class: 'rb-auf', onclick: () => { schreib('rbGesehen', tagKey()); rueckblick(); zeigeListe(); } }, '📊 Tagesrückblick ansehen'),
         h('button', { type: 'button', class: 'allegesehen', 'aria-label': 'Hinweis schließen', onclick: () => { schreib('rbGesehen', tagKey()); zeigeListe(); } }, '✕')));
