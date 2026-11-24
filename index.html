@@ -313,7 +313,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '2.3 (24.11.)';
+  const APP_VERSION = '2.4 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -415,9 +415,11 @@ function angeboteAus(ereignisse) {
     doppel: { name: 'Doppel-Piep (kurz)', noten: [[1000, 0, .12], [1000, .22, .12]], form: 'square', laut: .25 },
     glocke: { name: 'Glocke (klingt nach)', noten: [[1318, 0, 1.4], [2636, 0, .9], [1976, .02, 1.1]], form: 'sine', laut: .35 },
     hupe: { name: 'LKW-Hupe (tief)', noten: [[220, 0, .55], [277, 0, .55], [220, .75, .55], [277, .75, .55]], form: 'sawtooth', laut: .22 },
+    hupe3: { name: 'LKW-Hupe 3× kurz (tief)', noten: [0, .36, .72].flatMap((d) => [[196, d, .24], [247, d, .24]]), form: 'sawtooth', laut: .24 },
     alarm: { name: 'Alarm (lang, laut)', noten: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => [i % 2 ? 900 : 1250, i * .2, .18]), form: 'square', laut: .3 }
   };
   let tonArt = lies('tonArt', 'dreiklang');
+  let tonArtLaLie = lies('tonArtLaLie', 'hupe3'); // eigener Ton für „Heute La-Lie“-Touren
   function spiele(art) {
     if (!audio || audio.state !== 'running') return;
     const t = TOENE[art] || TOENE.dreiklang, t0 = audio.currentTime, laut = t.laut || .4;
@@ -430,10 +432,10 @@ function angeboteAus(ereignisse) {
       o.connect(g); g.connect(audio.destination); o.start(t0 + d); o.stop(t0 + d + dauer + 0.02);
     });
   }
-  function gong() {
-    try { if (navigator.vibrate) navigator.vibrate([220, 120, 220]); } catch (e) { /* egal */ }
+  function gong(laLie) {
+    try { if (navigator.vibrate) navigator.vibrate(laLie ? [160, 110, 160, 110, 160] : [220, 120, 220]); } catch (e) { /* egal */ }
     if (!tonAn) return;
-    spiele(tonArt);
+    spiele(laLie ? tonArtLaLie : tonArt);
   }
   function tonKnopf() {
     const k = $('ton');
@@ -593,11 +595,15 @@ function angeboteAus(ereignisse) {
     const token = h('input', { id: 'f-token', type: 'password', autocomplete: 'off', value: lies('token', ''), placeholder: 'tk_… (nur wenn Kanäle reserviert sind)' });
     const tonWahl = h('select', { id: 'f-ton', style: 'flex:1' }, Object.keys(TOENE).map((k) => h('option', { value: k, selected: k === tonArt ? 'selected' : null, text: TOENE[k].name })));
     tonWahl.addEventListener('change', () => { tonArt = tonWahl.value; schreib('tonArt', tonArt); audioFreischalten(); setTimeout(() => spiele(tonArt), 80); });
+    const tonWahl2 = h('select', { id: 'f-ton2', style: 'flex:1' }, Object.keys(TOENE).map((k) => h('option', { value: k, selected: k === tonArtLaLie ? 'selected' : null, text: TOENE[k].name })));
+    tonWahl2.addEventListener('change', () => { tonArtLaLie = tonWahl2.value; schreib('tonArtLaLie', tonArtLaLie); audioFreischalten(); setTimeout(() => spiele(tonArtLaLie), 80); });
     eb.appendChild(h('div', { class: 'schleier', onclick: schliesse }));
     eb.appendChild(h('form', { class: 'blatt', onsubmit: (e) => { e.preventDefault(); schreib('kanal', kanal.value.trim()); schreib('token', token.value.trim()); schliesse(); lade(); } },
       h('h2', { text: 'Einstellungen' }),
       h('label', { for: 'f-ton' }, 'Ton bei neuen Touren (wenn die App offen ist)',
         h('div', { style: 'display:flex;gap:8px' }, tonWahl, h('button', { type: 'button', class: 'probe', onclick: () => { audioFreischalten(); setTimeout(() => spiele(tonWahl.value), 80); }, text: '▶ Anhören' }))),
+      h('label', { for: 'f-ton2' }, 'Eigener Ton für ☀️ Heute La-Lie',
+        h('div', { style: 'display:flex;gap:8px' }, tonWahl2, h('button', { type: 'button', class: 'probe', onclick: () => { audioFreischalten(); setTimeout(() => spiele(tonWahl2.value), 80); }, text: '▶ Anhören' }))),
       h('p', { text: 'Der Ton läuft über die Medien-Lautstärke des Handys. Ist sie leise gestellt, hörst du ihn kaum.' }),
       h('p', { text: 'Verbindung: Name deines Hauptkanals (wie in der ntfy-App, ohne „-heute“ und „-preis“). Die App liest dann deine echten Meldungen und aktualisiert sich alle 30 Sekunden.' }),
       h('label', { for: 'f-kanal' }, 'Kanal', kanal), h('label', { for: 'f-token' }, 'Zugriffstoken (optional)', token),
@@ -627,7 +633,7 @@ function angeboteAus(ereignisse) {
       // Neu dazugekommen, während die App offen war: piepen und die Zeilen kurz blinken lassen
       const frischDa = warLive ? angebote.filter((a) => !vorher.has(a.id) && istNeu(a)) : [];
       blinkIds = new Set(frischDa.map((a) => a.id));
-      if (frischDa.length && document.visibilityState === 'visible' && Date.now() - letzteSichtbareLadung < 120000) gong();
+      if (frischDa.length && document.visibilityState === 'visible' && Date.now() - letzteSichtbareLadung < 120000) gong(frischDa.some(istLaLie));
       if (document.visibilityState === 'visible') letzteSichtbareLadung = Date.now();
       zeige('Live · ' + stand.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr');
     } catch (e) {
