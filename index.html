@@ -226,8 +226,10 @@ function parseMeldung(msg) {
     leerKm: null, lastKm: null, heimKm: null, anfahrtAb: '', lm: null, t: null, stopps: null,
     ueber: null, euroKm: null, vorher: '', zahlung: null, mindest: null, vorschlag: null,
     firma: '', sterne: '', name: '', tel: '', mobil: '', mail: '', info: '', hinweise: [],
-    telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel)
+    telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel), ladenAb: null, ende: null
   };
+  const kl = /#tour-[A-Za-z0-9_-]+\.(\d+)\.(\d+)/.exec(String(msg.click || ''));
+  if (kl) { a.ladenAb = Number(kl[1]) * 60000; a.ende = Number(kl[2]) * 60000; }
   const kopf = titel.slice(0, titel.indexOf(route[0]));
   for (const k in FARBEN) if (kopf.indexOf(k) !== -1) { a.farbe = FARBEN[k]; break; }
   for (const k in ARTEN) if (kopf.indexOf(k) !== -1) a.art = ARTEN[k];
@@ -347,7 +349,7 @@ function angeboteAus(ereignisse) {
   }
 
   // ---------- Zustand ----------
-  let angebote = [], live = false, stand = null, reiter = lies('reiter', 'alle'), sortierung = lies('sort', 'laden'), offen = null;
+  let angebote = [], live = false, stand = null, reiter = lies('reiter2', 'lalie'), sortierung = lies('sort', 'laden'), offen = null;
   // „NEU“ = kam an, seit du die App zuletzt verlassen hast
   let gesehenBis = Number(lies('gesehenBis', '0')) || Date.now();
   const merkeGesehen = () => schreib('gesehenBis', String(Date.now()));
@@ -358,7 +360,17 @@ function angeboteAus(ereignisse) {
     const t = h('div', { class: 'toast', role: 'status', text: text });
     document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
   }
-  const REITER = [['alle', 'Alle'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
+  const REITER = [['lalie', '☀️ Heute La-Lie'], ['alle', 'Alle'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
+  // Heute La-Lie: heute laden und spätestens bis 5 Uhr morgen früh abladen können (Entladefenster öffnet bis dahin)
+  function istLaLie(a) {
+    const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
+    const morgen5 = heute0.getTime() + 864e5 + 5 * 36e5;
+    // Neue Meldungen: Ankunft an der Ladestelle und Ende der Entladung, wie der Wächter sie berechnet hat
+    if (a.ladenAb && a.ende) return a.ladenAb >= heute0.getTime() && a.ladenAb < heute0.getTime() + 864e5 && a.ende <= morgen5;
+    // Ältere Meldungen: nach der Art der Tour (☀️ heute leer, 🌙 Nacht, 🔁 Nacht und zurück)
+    return a.art === 'Heute leer' || a.art === 'Nacht' || a.art === 'Nacht und zurück';
+  }
+  const imReiter = (k) => (k === 'alle' ? angebote : k === 'lalie' ? angebote.filter(istLaLie) : angebote.filter((a) => a.kanal === k));
   $('sortierung').value = sortierung;
   $('sortierung').addEventListener('change', (e) => { sortierung = e.target.value; schreib('sort', sortierung); zeigeListe(); });
 
@@ -377,8 +389,8 @@ function angeboteAus(ereignisse) {
   function zeigeReiter() {
     const box = $('reiter'); box.textContent = '';
     REITER.forEach(([k, name]) => {
-      const n = k === 'alle' ? angebote.length : angebote.filter((a) => a.kanal === k).length;
-      box.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(reiter === k), onclick: () => { reiter = k; schreib('reiter', k); zeigeReiter(); zeigeListe(); } },
+      const n = imReiter(k).length;
+      box.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(reiter === k), onclick: () => { reiter = k; schreib('reiter2', k); zeigeReiter(); zeigeListe(); } },
         name, h('b', { class: 'num', text: String(n) })));
     });
   }
@@ -405,9 +417,9 @@ function angeboteAus(ereignisse) {
   }
 
   function zeigeListe() {
-    const l = sortiere(reiter === 'alle' ? angebote : angebote.filter((a) => a.kanal === reiter));
+    const l = sortiere(imReiter(reiter));
     const box = $('liste'); box.textContent = '';
-    if (!l.length) box.appendChild(h('div', { class: 'leer', text: live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
+    if (!l.length) box.appendChild(h('div', { class: 'leer', text: reiter === 'lalie' ? 'Gerade keine Tour, die heute geladen und bis 5 Uhr morgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
     l.forEach((a) => box.appendChild(zeile(a)));
     $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote');
   }
@@ -504,7 +516,8 @@ function angeboteAus(ereignisse) {
   function adresseLesen() {
     try {
       const k = decodeURIComponent((location.hash || '').slice(1));
-      if (/^tour-[A-Za-z0-9_-]+$/.test(k)) zielTour = k.slice(5);
+      const t = /^tour-([A-Za-z0-9_-]+)(?:\.\d+\.\d+)?$/.exec(k);
+      if (t) zielTour = t[1];
       else if (/^[A-Za-z0-9_-]{6,64}$/.test(k)) schreib('kanal', k);
       if (k) history.replaceState(null, '', location.pathname + location.search);
     } catch (e) { /* egal */ }
