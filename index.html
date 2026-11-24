@@ -120,9 +120,19 @@ button { font: inherit; color: inherit; }
   text-transform: none; letter-spacing: 0; cursor: pointer; }
 .neu, .zeile .c-ort .neu { color: #fff; }
 .neu { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .04em; vertical-align: 2px; }
-.tonsperre { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 55; background: #c8102e; color: #fff;
+.unten { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 55; display: grid; gap: 8px; pointer-events: none; }
+.unten > * { pointer-events: auto; }
+.tonsperre { background: #c8102e; color: #fff;
   border: 0; border-radius: 10px; padding: 12px 14px; font: 600 15px/1.35 inherit; text-align: left; box-shadow: 0 4px 16px rgba(0,0,0,.3); cursor: pointer; }
-.tonsperre[hidden] { display: none; }
+.tonsperre[hidden], .alarm[hidden] { display: none; }
+/* Klingel-Leiste: welche Tour gerade geklingelt hat – antippen öffnet sie */
+.alarm { display: grid; gap: 6px; background: var(--head); color: var(--head-fg); border-radius: 12px; padding: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.35); border: 3px solid var(--accent); }
+.alarm-kopf { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; opacity: .85; padding-inline: 4px; }
+.alarm-kopf button { background: transparent; border: 0; color: inherit; font-size: 22px; line-height: 1; padding: 2px 6px; cursor: pointer; }
+.alarm-tour { display: block; width: 100%; text-align: left; background: rgba(255,255,255,.12); color: inherit; border: 0; border-radius: 8px; padding: 10px 12px; font: 600 15px/1.35 inherit; cursor: pointer; }
+.alarm-tour small { display: block; font-weight: 500; opacity: .85; font-size: 13px; }
+.zeile.klingel { box-shadow: inset 0 0 0 3px var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .zeile.klingel { animation: blinken 1.2s ease-in-out infinite; } .alarm { animation: rein .2s ease-out; } }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 60; background: var(--fg); color: var(--bg);
   padding: 10px 14px; border-radius: 8px; font-size: 13.5px; max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
 
@@ -320,7 +330,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '3.5 (24.11.)';
+  const APP_VERSION = '3.6 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -404,7 +414,24 @@ function angeboteAus(ereignisse) {
   setInterval(() => { if (document.visibilityState === 'visible') neueVersion(); }, 5 * 60000);
   let zielTour = null;
   // ---------- Ton bei neuen Touren, solange die App offen ist ----------
-  let tonAn = lies('ton', '1') === '1', audio = null, wachHalten = null, blinkIds = new Set();
+  let tonAn = lies('ton', '1') === '1', audio = null, wachHalten = null, blinkIds = new Set(), klingelIds = new Set(), alarm = null;
+  // Leiste unten: Touren, die gerade geklingelt haben (bis du sie öffnest, ✕ tippst oder sie nicht mehr neu sind)
+  function zeigeAlarm() {
+    if (!alarm) return;
+    const liste = angebote.filter((a) => klingelIds.has(a.id) && istNeu(a))
+      .sort((x, y) => (istLaLie(y) - istLaLie(x)) || (y.deckung ?? -1) - (x.deckung ?? -1));
+    klingelIds = new Set(liste.map((a) => a.id));
+    alarm.textContent = '';
+    alarm.hidden = !liste.length;
+    setTimeout(platzUnten, 0);
+    if (!liste.length) return;
+    alarm.appendChild(h('div', { class: 'alarm-kopf' }, liste.length === 1 ? 'Diese Tour hat geklingelt' : liste.length + ' Touren haben geklingelt',
+      h('button', { type: 'button', 'aria-label': 'Schließen', text: '✕', onclick: () => { klingelIds.clear(); zeigeAlarm(); zeigeListe(); } })));
+    liste.slice(0, 3).forEach((a) => alarm.appendChild(h('button', { type: 'button', class: 'alarm-tour', onclick: () => oeffne(a) },
+      (istLaLie(a) ? '🚛 Heute La-Lie · ' : '🌅 Morgen La-Lie · ') + a.start + ' → ' + a.ziel + '  ›',
+      h('small', { text: (a.preis != null ? euro(a.preis) + (a.deckung != null ? ' (' + a.deckung + ' %)' : '') : 'Preis abklären') +
+        (a.ladenText ? ' · Laden ' + a.ladenText : '') + (a.firma ? ' · ' + a.firma : '') }))));
+  }
   function audioFreischalten() {
     try {
       if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
@@ -526,8 +553,13 @@ function angeboteAus(ereignisse) {
   // Roter Hinweis unten, solange der Ton gesperrt ist (z. B. direkt nach einem App-Update): einmal tippen gibt ihn frei
   const sperre = h('button', { type: 'button', class: 'tonsperre', hidden: 'hidden', onclick: () => { audioFreischalten(); bildschirmAn(); } },
     amHandy ? '🔇 Ton noch gesperrt – einmal tippen. Bis dahin klingelt ntfy.' : '🔇 Ton noch gesperrt – einmal tippen.');
-  document.body.appendChild(sperre);
-  function tonSperreZeigen() { sperre.hidden = !(tonAn && document.visibilityState === 'visible' && !kannTon()); }
+  const unten = h('div', { class: 'unten' });
+  alarm = h('div', { class: 'alarm', hidden: 'hidden', role: 'status' });
+  unten.appendChild(alarm); unten.appendChild(sperre);
+  document.body.appendChild(unten);
+  function tonSperreZeigen() { sperre.hidden = !(tonAn && document.visibilityState === 'visible' && !kannTon()); platzUnten(); }
+  // Unten so viel Platz lassen, dass die Leisten die letzten Touren nicht verdecken
+  function platzUnten() { try { document.body.style.paddingBottom = (unten.offsetHeight ? unten.offsetHeight + 24 : 0) + 'px'; } catch (e) { /* egal */ } }
   // Gleich beim Start versuchen, den Ton freizuschalten: Die installierte App auf dem Handy darf das meist ohne Antippen.
   // Nur wenn der Browser es nicht erlaubt, erscheint der rote Hinweis.
   function tonVersuch() {
@@ -614,7 +646,7 @@ function angeboteAus(ereignisse) {
     const seit = istNeu(a) ? (vor < 1 ? 'gerade eben' : vor < 60 ? 'vor ' + vor + ' Min.' : 'vor ' + Math.round(vor / 60) + ' Std.')
       : (heuteTag ? 'seit ' + uhr : 'seit ' + String(d0.getDate()).padStart(2, '0') + '.' + String(d0.getMonth() + 1).padStart(2, '0') + '. ' + uhr);
     const unten = [seit, a.firma, a.lm != null ? zahl(a.lm) + ' m' : '', a.t != null ? zahl(a.t) + ' t' : '', a.art || ''].filter(Boolean).join(' · ');
-    return h('button', { class: 'zeile f-' + a.farbe + (blinkIds.has(a.id) ? ' blink' : ''), type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
+    return h('button', { class: 'zeile f-' + a.farbe + (klingelIds.has(a.id) && istNeu(a) ? ' klingel' : blinkIds.has(a.id) ? ' blink' : ''), type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
       h('span', { class: 'streifen', 'aria-hidden': 'true' }),
       h('span', { class: 'c-ort' }, h('b', null, a.start, istNeu(a) ? h('span', { class: 'neu', text: 'NEU' }) : null), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
       h('span', { class: 'pfeil', 'aria-hidden': 'true', text: '→' }),
@@ -656,6 +688,7 @@ function angeboteAus(ereignisse) {
   // ---------- Detailseite wie ein Timocom-Angebot ----------
   function oeffne(a) {
     offen = a;
+    if (klingelIds.delete(a.id)) zeigeAlarm();
     if (istNeu(a)) { alsGelesen(a); setTimeout(() => { zeigeReiter(); zeigeListe(); }, 0); }
     const eb = $('ebene'); eb.textContent = '';
     const feld = (dt, dd) => (dd ? h('div', { class: 'feld' }, h('dt', { text: dt }), h('dd', null, dd)) : null);
@@ -741,8 +774,11 @@ function angeboteAus(ereignisse) {
       // Ton nur bei La-Lie: ☀️ Heute La-Lie (LKW-Signal) und 🌅 Morgen La-Lie (Hinweiston) – alles andere kommt still mit NEU
       const mitTon = frischDa.filter((a) => istLaLie(a) || istMorgenLaLie(a));
       if (mitTon.length && document.visibilityState === 'visible' && Date.now() - letzteSichtbareLadung < 120000) gong(mitTon.some(istLaLie));
+      // Welche Tour hat geklingelt? Unten als Leiste zeigen und in der Liste markieren, bis du sie öffnest
+      mitTon.forEach((a) => klingelIds.add(a.id));
       if (document.visibilityState === 'visible') letzteSichtbareLadung = Date.now();
       zeige('Live · ' + stand.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr');
+      zeigeAlarm();
     } catch (e) {
       live = false; angebote = angeboteAus(beispiel());
       zeige('Keine Verbindung – Beispieldaten');
