@@ -106,6 +106,10 @@ button { font: inherit; color: inherit; }
 .f-rot { background: var(--rot-bg); } .f-rot .streifen { background: var(--rot); }
 .f-anfrage { background: var(--anfrage-bg); } .f-anfrage .streifen { background: var(--anfrage); }
 .prozent { font-size: 12.5px; font-weight: 600; }
+@keyframes blinken { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 0 3px var(--accent); } }
+.zeile.blink { animation: blinken .9s ease-in-out 5; }
+@media (prefers-reduced-motion: reduce) { .zeile.blink { animation: none; box-shadow: inset 0 0 0 3px var(--accent); } }
+.ikon.aus { opacity: .55; }
 .heute { color: var(--accent); }
 .leer { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 .gruppe { padding: 6px max(12px, env(safe-area-inset-right, 0px)) 6px 14px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
@@ -169,6 +173,7 @@ button { font: inherit; color: inherit; }
   <div class="kopf-zeile">
     <div class="marke"><i aria-hidden="true"></i>Fracht-Wächter</div>
     <div class="stand" id="stand">Beispieldaten</div>
+    <button class="ikon" id="ton" type="button" aria-label="Ton bei neuen Touren">🔔</button>
     <button class="ikon" id="neu" type="button" aria-label="Aktualisieren">↻</button>
     <button class="ikon" id="einst" type="button" aria-label="Einstellungen">⚙</button>
   </div>
@@ -306,7 +311,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '2.0 (24.11.)';
+  const APP_VERSION = '2.1 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -389,6 +394,48 @@ function angeboteAus(ereignisse) {
   setTimeout(neueVersion, 5000);
   setInterval(() => { if (document.visibilityState === 'visible') neueVersion(); }, 5 * 60000);
   let zielTour = null;
+  // ---------- Ton bei neuen Touren, solange die App offen ist ----------
+  let tonAn = lies('ton', '1') === '1', audio = null, wachHalten = null, blinkIds = new Set();
+  function audioFreischalten() {
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+    } catch (e) { /* kein Ton möglich */ }
+  }
+  // Bildschirm anlassen, solange der Ton an ist – sonst geht das Handy aus und die App bekommt nichts mit
+  async function bildschirmAn() {
+    if (!tonAn || wachHalten || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    try { wachHalten = await navigator.wakeLock.request('screen'); wachHalten.addEventListener('release', () => { wachHalten = null; }); } catch (e) { /* nicht erlaubt */ }
+  }
+  function gong() {
+    try { if (navigator.vibrate) navigator.vibrate([220, 120, 220]); } catch (e) { /* egal */ }
+    if (!tonAn || !audio || audio.state !== 'running') return;
+    const t0 = audio.currentTime;
+    [[880, 0], [1175, 0.17], [1568, 0.34]].forEach(([f, d]) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0 + d);
+      g.gain.exponentialRampToValueAtTime(0.4, t0 + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.32);
+      o.connect(g); g.connect(audio.destination); o.start(t0 + d); o.stop(t0 + d + 0.34);
+    });
+  }
+  function tonKnopf() {
+    const k = $('ton');
+    k.textContent = tonAn ? '🔔' : '🔕';
+    k.classList.toggle('aus', !tonAn);
+    k.setAttribute('aria-label', tonAn ? 'Ton bei neuen Touren ist an' : 'Ton bei neuen Touren ist aus');
+  }
+  // Browser spielen Töne erst nach dem ersten Antippen – darum beim ersten Tippen irgendwo freischalten
+  document.addEventListener('pointerdown', () => { if (tonAn) { audioFreischalten(); bildschirmAn(); } }, { passive: true });
+  $('ton').addEventListener('click', () => {
+    tonAn = !tonAn; schreib('ton', tonAn ? '1' : '0'); tonKnopf();
+    if (tonAn) { audioFreischalten(); bildschirmAn(); setTimeout(gong, 120); hinweis('Ton an: Solange die App offen ist, piept sie bei jeder neuen Tour. Der Bildschirm bleibt dabei an.'); }
+    else { if (wachHalten) wachHalten.release(); hinweis('Ton aus.'); }
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') bildschirmAn(); });
+  tonKnopf();
+
   function hinweis(text) {
     const t = h('div', { class: 'toast', role: 'status', text: text });
     document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
@@ -444,7 +491,7 @@ function angeboteAus(ereignisse) {
     const seit = istNeu(a) ? (vor < 1 ? 'gerade eben' : vor < 60 ? 'vor ' + vor + ' Min.' : 'vor ' + Math.round(vor / 60) + ' Std.')
       : (heuteTag ? 'seit ' + uhr : 'seit ' + String(d0.getDate()).padStart(2, '0') + '.' + String(d0.getMonth() + 1).padStart(2, '0') + '. ' + uhr);
     const unten = [seit, a.firma, a.lm != null ? zahl(a.lm) + ' m' : '', a.t != null ? zahl(a.t) + ' t' : '', a.art || ''].filter(Boolean).join(' · ');
-    return h('button', { class: 'zeile f-' + a.farbe, type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
+    return h('button', { class: 'zeile f-' + a.farbe + (blinkIds.has(a.id) ? ' blink' : ''), type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
       h('span', { class: 'streifen', 'aria-hidden': 'true' }),
       h('span', { class: 'c-ort' }, h('b', null, a.start, istNeu(a) ? h('span', { class: 'neu', text: 'NEU' }) : null), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
       h('span', { class: 'pfeil', 'aria-hidden': 'true', text: '→' }),
@@ -535,6 +582,7 @@ function angeboteAus(ereignisse) {
     if (!r.ok) throw new Error('ntfy ' + r.status);
     return (await r.text()).split('\n').filter(Boolean).map((z) => { try { return JSON.parse(z); } catch (e) { return null; } }).filter(Boolean);
   }
+  let letzteSichtbareLadung = 0;
   async function lade() {
     const kanal = lies('kanal', ''), token = lies('token', '');
     if (!kanal) { live = false; angebote = angeboteAus(beispiel()); stand = new Date(); return zeige('Beispieldaten'); }
@@ -542,8 +590,14 @@ function angeboteAus(ereignisse) {
     try {
       const teile = await Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token)));
       const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
+      const vorher = new Set(angebote.map((a) => a.id)), warLive = live;
       live = true; stand = new Date();
       angebote = angeboteAus(teile.flat()).filter((a) => !(a.laden && a.laden.bis && a.laden.bis < heute0)); // Ladetag schon vorbei
+      // Neu dazugekommen, während die App offen war: piepen und die Zeilen kurz blinken lassen
+      const frischDa = warLive ? angebote.filter((a) => !vorher.has(a.id) && istNeu(a)) : [];
+      blinkIds = new Set(frischDa.map((a) => a.id));
+      if (frischDa.length && document.visibilityState === 'visible' && Date.now() - letzteSichtbareLadung < 120000) gong();
+      if (document.visibilityState === 'visible') letzteSichtbareLadung = Date.now();
       zeige('Live · ' + stand.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr');
     } catch (e) {
       live = false; angebote = angeboteAus(beispiel());
