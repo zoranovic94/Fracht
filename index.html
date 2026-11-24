@@ -27,9 +27,9 @@
   --line: #d3dae2;
   --accent: #c8102e;
   --link: #1f5f9e;
-  --gold-bg: #fff1c2; --gold: #a37700;
+  --gold-bg: #ffd966; --gold: #9a6b00;
   --gruen-bg: #dcf2e1; --gruen: #2e7d32;
-  --gelb-bg: #fff6d3; --gelb: #b98900;
+  --gelb-bg: #fffbe3; --gelb: #e0b400;
   --rot-bg: #fde3da; --rot: #c2410c;
   --anfrage-bg: #e1ecfa; --anfrage: #1c64c4;
   --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -38,7 +38,7 @@
   :root:not([data-theme="light"]) {
     --bg: #10161d; --surface: #18212b; --head: #243a50; --head-fg: #f1f5f9; --fg: #e5ebf1; --muted: #98a6b5; --line: #2a3846;
     --accent: #ef4d63; --link: #7fb3ec;
-    --gold-bg: #3a3112; --gold: #f2c94c; --gruen-bg: #17321e; --gruen: #6fcf7f; --gelb-bg: #36300f; --gelb: #ecc94b;
+    --gold-bg: #5a4300; --gold: #ffcc33; --gruen-bg: #17321e; --gruen: #6fcf7f; --gelb-bg: #2a2714; --gelb: #cfae3f;
     --rot-bg: #3a1e14; --rot: #fb8a5a; --anfrage-bg: #142a45; --anfrage: #78aef0;
     color-scheme: dark;
   }
@@ -46,7 +46,7 @@
 :root[data-theme="dark"] {
   --bg: #10161d; --surface: #18212b; --head: #243a50; --head-fg: #f1f5f9; --fg: #e5ebf1; --muted: #98a6b5; --line: #2a3846;
   --accent: #ef4d63; --link: #7fb3ec;
-  --gold-bg: #3a3112; --gold: #f2c94c; --gruen-bg: #17321e; --gruen: #6fcf7f; --gelb-bg: #36300f; --gelb: #ecc94b;
+  --gold-bg: #5a4300; --gold: #ffcc33; --gruen-bg: #17321e; --gruen: #6fcf7f; --gelb-bg: #2a2714; --gelb: #cfae3f;
   --rot-bg: #3a1e14; --rot: #fb8a5a; --anfrage-bg: #142a45; --anfrage: #78aef0;
   color-scheme: dark;
 }
@@ -100,7 +100,8 @@ button { font: inherit; color: inherit; }
 .zeile span span, .zeile small { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zeile small { grid-column: 2 / 7; margin-top: 3px; }
 .streifen { align-self: stretch; margin-block: -9px; }
-.f-gold { background: var(--gold-bg); } .f-gold .streifen { background: var(--gold); }
+.f-gold { background: var(--gold-bg); } .f-gold .streifen { background: var(--gold); width: 7px; }
+.f-gold .c-preis b { font-size: 1.08em; }
 .f-gruen { background: var(--gruen-bg); } .f-gruen .streifen { background: var(--gruen); }
 .f-gelb { background: var(--gelb-bg); } .f-gelb .streifen { background: var(--gelb); }
 .f-rot { background: var(--rot-bg); } .f-rot .streifen { background: var(--rot); }
@@ -319,7 +320,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '3.4 (24.11.)';
+  const APP_VERSION = '3.5 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -546,6 +547,8 @@ function angeboteAus(ereignisse) {
     const t = h('div', { class: 'toast', role: 'status', text: text });
     document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
   }
+  // Symbol vor der Prozentzahl – damit 🥇 Gold und 🟡 geht so auf einen Blick zu unterscheiden sind
+  const FARB_SYMBOL = { gold: '🥇', gruen: '🟢', gelb: '🟡', rot: '🔴' };
   const REITER = [['alle', 'Alle'], ['lalie', '☀️ Heute La-Lie'], ['mlalie', '🌅 Morgen La-Lie'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
   // La-Lie an einem Tag (0 = heute, 1 = morgen): an dem Tag laden und bis 5 Uhr am Morgen danach abgeladen
   // Lade- oder Entladezeit nicht angegeben → nie La-Lie (man weiß nicht, wann man fertig ist)
@@ -618,7 +621,7 @@ function angeboteAus(ereignisse) {
       h('span', { class: 'c-ort' }, h('b', { text: a.ziel }), wann(a.entladen, '', a.entladenText)),
       h('span', { class: 'c-km' }, h('b', { class: 'num', text: a.lastKm != null ? zahl(a.lastKm, 0) : '–' }), h('span', { text: a.leerKm != null ? '+' + zahl(a.leerKm, 0) : '' })),
       h('span', { class: 'c-preis' }, h('b', { class: 'num', text: a.preis != null ? euro(a.preis) : 'abklären' }),
-        h('span', { class: 'prozent num', text: a.deckung != null ? a.deckung + ' %' : (a.vorschlag ? '~' + euro(a.vorschlag) : '') })),
+        h('span', { class: 'prozent num', text: a.deckung != null ? (FARB_SYMBOL[a.farbe] ? FARB_SYMBOL[a.farbe] + ' ' : '') + a.deckung + ' %' : (a.vorschlag ? '~' + euro(a.vorschlag) : '') })),
       unten ? h('small', { text: unten }) : null);
   }
 
