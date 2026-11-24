@@ -313,7 +313,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '2.6 (24.11.)';
+  const APP_VERSION = '2.7 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -414,6 +414,7 @@ function angeboteAus(ereignisse) {
   // Töne zum Auswählen – mit „datei“ als Aufnahme (Ordner toene/), sonst direkt im Handy erzeugt.
   // „noten“ bei den Aufnahmen ist nur Ersatz, falls die Datei mal nicht lädt.
   const TOENE = {
+    hinweis: { name: 'Hinweiston (Aufnahme)', datei: 'toene/hinweis.mp3', noten: [[880, 0, .3], [1175, .17, .3], [1568, .34, .32]], form: 'sine' },
     dreiklang: { name: 'Dreiklang (hell)', noten: [[880, 0, .3], [1175, .17, .3], [1568, .34, .32]], form: 'sine' },
     doppel: { name: 'Doppel-Piep (kurz)', noten: [[1000, 0, .12], [1000, .22, .12]], form: 'square', laut: .25 },
     glocke: { name: 'Glocke (Bronze, klingt lange nach)', datei: 'toene/glocke.mp3', noten: [[1318, 0, 1.4], [2636, 0, .9], [1976, .02, 1.1]], form: 'sine', laut: .35 },
@@ -436,9 +437,9 @@ function angeboteAus(ereignisse) {
     }
     return tonLaedt[art];
   }
-  let tonArt = lies('tonArt', 'glocke');
-  // Einmalig umstellen: normale Touren klingen ab 2.5 mit der Glocke (danach frei wählbar)
-  if (lies('tonGlocke25', '') !== '1') { tonArt = 'glocke'; schreib('tonArt', tonArt); schreib('tonGlocke25', '1'); }
+  let tonArt = lies('tonArt', 'hinweis');
+  // Einmalig umstellen: normale Touren klingen ab 2.7 mit dem Hinweiston (danach frei wählbar)
+  if (lies('tonHinweis27', '') !== '1') { tonArt = 'hinweis'; schreib('tonArt', tonArt); schreib('tonHinweis27', '1'); }
   let tonArtLaLie = lies('tonArtLaLie', 'lkw'); // eigener Ton für „Heute La-Lie“-Touren
   // Einmalig umstellen: Heute La-Lie bekommt ab 2.6 das LKW-Signal (Aufnahme)
   if (lies('tonLkw26', '') !== '1') { tonArtLaLie = 'lkw'; schreib('tonArtLaLie', tonArtLaLie); schreib('tonLkw26', '1'); }
