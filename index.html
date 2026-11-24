@@ -108,6 +108,9 @@ button { font: inherit; color: inherit; }
 .prozent { font-size: 12.5px; font-weight: 600; }
 .heute { color: var(--accent); }
 .leer { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+.gruppe { padding: 6px max(12px, env(safe-area-inset-right, 0px)) 6px 14px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted); background: var(--bg); border-bottom: 1px solid var(--line); }
+.gruppe.frisch { color: var(--accent); }
 .neu { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .04em; vertical-align: 2px; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 60; background: var(--fg); color: var(--bg);
   padding: 10px 14px; border-radius: 8px; font-size: 13.5px; max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
@@ -404,7 +407,9 @@ function angeboteAus(ereignisse) {
       const tag = tagKurz(f.von) + (f.bis && f.bis.getTime() !== f.von.getTime() ? '–' + tagKurz(f.bis) : '');
       return h('span', { class: cls }, tag + ' ', f.uhr ? h('i', { class: 'uhr', text: f.uhr.replace(' Uhr', '') }) : null);
     };
-    const unten = [a.firma, a.lm != null ? zahl(a.lm) + ' m' : '', a.t != null ? zahl(a.t) + ' t' : '', a.art || ''].filter(Boolean).join(' · ');
+    const vor = Math.max(0, Math.round((Date.now() - a.zeit) / 60000));
+    const seit = a.zeit > gesehenBis ? (vor < 1 ? 'gerade eben' : vor < 60 ? 'vor ' + vor + ' Min.' : 'vor ' + Math.round(vor / 60) + ' Std.') : '';
+    const unten = [seit, a.firma, a.lm != null ? zahl(a.lm) + ' m' : '', a.t != null ? zahl(a.t) + ' t' : '', a.art || ''].filter(Boolean).join(' · ');
     return h('button', { class: 'zeile f-' + a.farbe, type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
       h('span', { class: 'streifen', 'aria-hidden': 'true' }),
       h('span', { class: 'c-ort' }, h('b', null, a.start, a.zeit > gesehenBis ? h('span', { class: 'neu', text: 'NEU' }) : null), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
@@ -420,7 +425,15 @@ function angeboteAus(ereignisse) {
     const l = sortiere(imReiter(reiter));
     const box = $('liste'); box.textContent = '';
     if (!l.length) box.appendChild(h('div', { class: 'leer', text: reiter === 'lalie' ? 'Gerade keine Tour, die heute geladen und bis 5 Uhr morgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
-    l.forEach((a) => box.appendChild(zeile(a)));
+    // Was seit deinem letzten Blick reingekommen ist, steht immer oben – die neueste zuerst
+    const frisch = l.filter((a) => a.zeit > gesehenBis).sort((x, y) => y.zeit - x.zeit);
+    const rest = l.filter((a) => !(a.zeit > gesehenBis));
+    if (frisch.length) {
+      box.appendChild(h('div', { class: 'gruppe frisch', text: 'Neu reingekommen (' + frisch.length + ')' }));
+      frisch.forEach((a) => box.appendChild(zeile(a)));
+      if (rest.length) box.appendChild(h('div', { class: 'gruppe', text: 'Weitere Touren' }));
+    }
+    rest.forEach((a) => box.appendChild(zeile(a)));
     $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote');
   }
 
