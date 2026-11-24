@@ -330,6 +330,16 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 .rb-std i { width: 100%; min-height: 2px; background: var(--head2, #2f5c84); border-radius: 4px 4px 0 0; } .rb-std span { font-size: 10.5px; color: var(--muted); }
 .rb-hinweis { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rb-auf { border: 0; background: transparent; color: var(--link); font: 700 14px var(--font); padding: 4px 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
+/* 4.4: Rückladungs-Schild und Firmen-Gedächtnis */
+.trend.r-gut { background: #1e8e4a; color: #fff; }
+.trend.r-mittel { background: #f5c400; color: #3a2f00; }
+.trend.r-schlecht { background: color-mix(in srgb, #c8102e 16%, transparent); color: #c8102e; }
+.trend.r-heim { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--fg); }
+.zeile.f-gold small .trend.r-schlecht { background: rgba(255,120,120,.22); color: #ffb3b3; }
+.zeile.f-gold small .trend.r-heim { background: rgba(255,255,255,.16); color: #fff; }
+.zeile small { line-height: 1.9; }
+.fg-tour { display: grid; gap: 1px; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--fg); padding: 9px 12px; font: inherit; cursor: pointer; }
+.fg-tour b { font-size: 14px; } .fg-tour span { font-size: 12.5px; color: var(--muted); } .fg-tour.weg { cursor: default; }
 /* 4.1: Übersichtskarte und Wischen */
 .chip.ansicht { margin-left: 2px; white-space: nowrap; }
 .chip.ansicht[aria-pressed="true"] { background: var(--head); color: #fff; }
@@ -512,7 +522,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.3 (24.11.)';
+  const APP_VERSION = '4.4 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -929,8 +939,21 @@ function angeboteAus(ereignisse) {
       h('span', { class: 'c-km' }, h('b', { class: 'num', text: a.lastKm != null ? zahl(a.lastKm, 0) : '–' }), h('span', { text: a.leerKm != null ? '+' + zahl(a.leerKm, 0) : '' })),
       h('span', { class: 'c-preis' }, h('b', { class: 'num', text: a.preis != null ? euro(a.preis) : 'abklären' }),
         h('span', { class: 'prozent num', text: a.deckung != null ? (FARB_SYMBOL[a.farbe] ? FARB_SYMBOL[a.farbe] + ' ' : '') + a.deckung + ' %' : (a.vorschlag ? '~' + euro(a.vorschlag) : '') })),
-      unten || trendVon(a) ? h('small', null, trendSchild(a), unten) : null);
+      unten || trendVon(a) || rueckVon(a) ? h('small', null, trendSchild(a), rueckSchild(a), unten) : null);
   }
+  // Rückladung am Ziel (prüft der Wächter): gut / mittel / schlecht – oder Ziel liegt ohnehin nah an der Heimat
+  function rueckVon(a) {
+    const z = (a.hinweise || []).find((x) => /^↩ Rückladung Richtung/.test(x));
+    if (z) {
+      const n = /·\s*(\d+\+?)\s*Ladung/.exec(z), art = /🟢/.test(z) ? 'gut' : /🟡/.test(z) ? 'mittel' : 'schlecht';
+      const wort = (/(?:🟢|🟡|🔴|🟠)\s*([^·]+)/.exec(z) || [])[1];
+      return { art: art, text: '↩ Rückladung ' + (wort ? wort.trim() : art) + (n ? ' (' + n[1] + ')' : '') };
+    }
+    const heim = (a.hinweise || []).find((x) => /^🏠/.test(x));
+    if (heim) return { art: 'heim', text: /Leer heim/.test(heim) ? '🏠 leer heim eingerechnet' : '🏠 Ziel nah an der Heimat' };
+    return null;
+  }
+  function rueckSchild(a) { const r = rueckVon(a); return r ? h('span', { class: 'trend rueck r-' + r.art, text: r.text }) : null; }
   // Preis geändert? „vorher 900 €“ steht in der Meldung des Wächters. +1 = gestiegen, -1 = gesenkt, 2 = vorher ohne Preis
   function trendVon(a) {
     if (!a.vorher || a.preis == null) return 0;
@@ -1017,6 +1040,7 @@ function angeboteAus(ereignisse) {
         karteFuer(a),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Kontaktangaben' }),
           feld('Unternehmen', (a.firma || '–') + (a.sterne ? '  ★ ' + a.sterne : '')), feld('Ansprechpartner', a.name), feld('Telefon', a.tel), feld('Mobil', a.mobil), feld('E-Mail', a.mail)),
+        firmenAbschnitt(a),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Be- und Entladestellen' }),
           h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↓' }), h('div', null, h('div', { class: 'ort', text: a.start }), h('div', { class: 'zeit', text: datumLang(a.laden) || a.ladenText }))),
           h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↑' }), h('div', null, h('div', { class: 'ort', text: a.ziel }), h('div', { class: 'zeit', text: (datumLang(a.entladen) || a.entladenText) + (a.stopps ? ' · ' + a.stopps + ' Stopps' : '') }))),
@@ -1197,6 +1221,44 @@ function angeboteAus(ereignisse) {
     // ältere Tage aufräumen
     try { Object.keys(localStorage).filter((k) => /^fw_tag_/.test(k) && k !== 'fw_' + tagKey()).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
   }
+  // ---------- Firmen-Gedächtnis: welche Touren hat eine Firma in den letzten 14 Tagen gemeldet? ----------
+  const firmaKey = (name) => String(name || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, ' ').trim();
+  function firmenLesen() { try { return JSON.parse(lies('firmen', '{}')) || {}; } catch (e) { return {}; } }
+  function firmenMerken(ereignisse) {
+    const alle = firmenLesen(), grenze = Date.now() - 14 * 864e5;
+    ereignisse.forEach((e) => {
+      if (e.event !== 'message') return;
+      const a = parseMeldung(e);
+      const k = a && firmaKey(a.firma);
+      if (!k || !a.start || !a.ziel) return;
+      const l = alle[k] = alle[k] || [];
+      const alt = l.findIndex((x) => x.i === a.id);
+      const neu = { i: a.id, t: a.zeit, s: a.start, z: a.ziel, p: a.preis, d: a.deckung };
+      if (alt >= 0) l[alt] = neu; else l.push(neu);
+    });
+    Object.keys(alle).forEach((k) => { alle[k] = alle[k].filter((x) => x.t >= grenze).sort((x, y) => y.t - x.t).slice(0, 40); if (!alle[k].length) delete alle[k]; });
+    if (!lies('firmenSeit', '')) schreib('firmenSeit', String(Date.now()));
+    schreib('firmen', JSON.stringify(alle));
+  }
+  function firmenAbschnitt(a) {
+    const k = firmaKey(a.firma);
+    if (!k) return null;
+    const l = (firmenLesen()[k] || []), andere = l.filter((x) => x.i !== a.id), mitP = l.filter((x) => x.d != null);
+    const seit = Number(lies('firmenSeit', '')) || Date.now();
+    const tage = Math.max(1, Math.min(14, Math.ceil((Date.now() - seit) / 864e5)));
+    const zeitraum = tage <= 1 ? 'seit heute' : 'in den letzten ' + tage + ' Tagen';
+    const tagText = (t) => { const d = new Date(t), h0 = new Date(); return (d.toDateString() === h0.toDateString() ? 'heute' : String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.') + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); };
+    const schnitt = mitP.length ? Math.round(mitP.reduce((s0, x) => s0 + x.d, 0) / mitP.length) : null;
+    const kopf = !andere.length ? 'Erste Tour dieser Firma ' + zeitraum + '.'
+      : l.length + ' Touren ' + zeitraum + (schnitt != null ? ' · im Schnitt ' + schnitt + ' %' + (mitP.length > 1 ? ' · beste ' + Math.max(...mitP.map((x) => x.d)) + ' %' : '') : '') + (l.length - mitP.length ? ' · ' + (l.length - mitP.length) + ' ohne Preis' : '');
+    return h('section', { class: 'abschnitt' }, h('h2', { text: 'Firmen-Gedächtnis' }),
+      h('div', { class: 'notiz', text: kopf }),
+      andere.slice(0, 5).map((x) => { const da = angebote.find((y) => y.id === x.i);
+        return h('button', { type: 'button', class: 'fg-tour' + (da ? '' : ' weg'), disabled: da ? null : 'disabled', onclick: () => { if (da) oeffne(da); } },
+          h('b', { text: x.s + ' → ' + x.z }), h('span', { text: tagText(x.t) + ' · ' + (x.p != null ? euro(x.p) + (x.d != null ? ' · ' + x.d + ' %' : '') : 'ohne Preis') + (da ? ' · noch offen ›' : '') })); }),
+      andere.length > 5 ? h('div', { class: 'notiz', text: '… und ' + (andere.length - 5) + ' weitere' }) : null);
+  }
+
   function rueckblick() {
     const alle = Object.entries(tagLesen()).map(([id, x]) => Object.assign({ id: id }, x));
     const eb = $('ebene'); eb.textContent = '';
@@ -1248,6 +1310,7 @@ function angeboteAus(ereignisse) {
       live = true; stand = new Date();
       angebote = angeboteAus(teile.flat()).filter((a) => !(a.laden && a.laden.bis && a.laden.bis < heute0)); // Ladetag schon vorbei
       try { tagMerken(teile.flat(), heute0.getTime()); } catch (e) { /* Rückblick ist nicht lebenswichtig */ }
+      try { firmenMerken(teile.flat()); } catch (e) { /* Gedächtnis ist nicht lebenswichtig */ }
       // Neu dazugekommen, während die App offen war: piepen und die Zeilen kurz blinken lassen
       const frischDa = warLive ? angebote.filter((a) => !vorher.has(a.id) && istNeu(a)) : [];
       blinkIds = new Set(frischDa.map((a) => a.id));
