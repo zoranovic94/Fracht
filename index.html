@@ -313,7 +313,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '2.5 (24.11.)';
+  const APP_VERSION = '2.6 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -402,6 +402,8 @@ function angeboteAus(ereignisse) {
     try {
       if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
       if (audio.state === 'suspended') audio.resume();
+      // gewählte Aufnahmen schon vorladen, damit sie sofort kommen
+      setTimeout(() => { try { tonLaden(tonArt); tonLaden(tonArtLaLie); } catch (e) { /* egal */ } }, 0);
     } catch (e) { /* kein Ton möglich */ }
   }
   // Bildschirm anlassen, solange der Ton an ist – sonst geht das Handy aus und die App bekommt nichts mit
@@ -409,22 +411,54 @@ function angeboteAus(ereignisse) {
     if (!tonAn || wachHalten || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
     try { wachHalten = await navigator.wakeLock.request('screen'); wachHalten.addEventListener('release', () => { wachHalten = null; }); } catch (e) { /* nicht erlaubt */ }
   }
-  // Töne zum Auswählen – alle direkt im Handy erzeugt, keine Dateien nötig
+  // Töne zum Auswählen – mit „datei“ als Aufnahme (Ordner toene/), sonst direkt im Handy erzeugt.
+  // „noten“ bei den Aufnahmen ist nur Ersatz, falls die Datei mal nicht lädt.
   const TOENE = {
     dreiklang: { name: 'Dreiklang (hell)', noten: [[880, 0, .3], [1175, .17, .3], [1568, .34, .32]], form: 'sine' },
     doppel: { name: 'Doppel-Piep (kurz)', noten: [[1000, 0, .12], [1000, .22, .12]], form: 'square', laut: .25 },
-    glocke: { name: 'Glocke (klingt nach)', noten: [[1318, 0, 1.4], [2636, 0, .9], [1976, .02, 1.1]], form: 'sine', laut: .35 },
-    hupe: { name: 'LKW-Hupe (tief)', noten: [[220, 0, .55], [277, 0, .55], [220, .75, .55], [277, .75, .55]], form: 'sawtooth', laut: .22 },
-    hupe3: { name: 'LKW-Hupe 3× kurz (tief)', noten: [0, .36, .72].flatMap((d) => [[196, d, .24], [247, d, .24]]), form: 'sawtooth', laut: .24 },
+    glocke: { name: 'Glocke (Bronze, klingt lange nach)', datei: 'toene/glocke.mp3', noten: [[1318, 0, 1.4], [2636, 0, .9], [1976, .02, 1.1]], form: 'sine', laut: .35 },
+    gloeckchen: { name: 'Glöckchen (hell)', datei: 'toene/gloeckchen.mp3', noten: [[1568, 0, 1.4], [4250, 0, .6]], form: 'sine', laut: .35 },
+    lkw: { name: 'LKW-Signal (Aufnahme)', datei: 'toene/lkw-signal.mp3', noten: [[220, 0, .55], [277, 0, .55], [220, .75, .55], [277, .75, .55]], form: 'sawtooth', laut: .22 },
+    hupe3: { name: 'LKW-Hupe 3× kurz (tief)', datei: 'toene/hupe3.mp3', noten: [0, .36, .72].flatMap((d) => [[196, d, .24], [247, d, .24]]), form: 'sawtooth', laut: .24 },
+    hupe: { name: 'LKW-Hupe lang', datei: 'toene/hupe.mp3', noten: [[220, 0, .55], [277, 0, .55], [220, .75, .55], [277, .75, .55]], form: 'sawtooth', laut: .22 },
     alarm: { name: 'Alarm (lang, laut)', noten: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => [i % 2 ? 900 : 1250, i * .2, .18]), form: 'square', laut: .3 }
   };
+  const tonPuffer = {}, tonLaedt = {};
+  function tonLaden(art) {
+    const t = TOENE[art];
+    if (!t || !t.datei || !audio) return Promise.resolve(null);
+    if (tonPuffer[art]) return Promise.resolve(tonPuffer[art]);
+    if (!tonLaedt[art]) {
+      tonLaedt[art] = fetch(t.datei).then((r) => { if (!r.ok) throw new Error('Ton ' + r.status); return r.arrayBuffer(); })
+        .then((d) => new Promise((ok, fehl) => audio.decodeAudioData(d, ok, fehl)))
+        .then((b) => (tonPuffer[art] = b))
+        .catch(() => { delete tonLaedt[art]; return null; });
+    }
+    return tonLaedt[art];
+  }
   let tonArt = lies('tonArt', 'glocke');
   // Einmalig umstellen: normale Touren klingen ab 2.5 mit der Glocke (danach frei wählbar)
   if (lies('tonGlocke25', '') !== '1') { tonArt = 'glocke'; schreib('tonArt', tonArt); schreib('tonGlocke25', '1'); }
-  let tonArtLaLie = lies('tonArtLaLie', 'hupe3'); // eigener Ton für „Heute La-Lie“-Touren
+  let tonArtLaLie = lies('tonArtLaLie', 'lkw'); // eigener Ton für „Heute La-Lie“-Touren
+  // Einmalig umstellen: Heute La-Lie bekommt ab 2.6 das LKW-Signal (Aufnahme)
+  if (lies('tonLkw26', '') !== '1') { tonArtLaLie = 'lkw'; schreib('tonArtLaLie', tonArtLaLie); schreib('tonLkw26', '1'); }
   function spiele(art) {
     if (!audio || audio.state !== 'running') return;
-    const t = TOENE[art] || TOENE.dreiklang, t0 = audio.currentTime, laut = t.laut || .4;
+    const t = TOENE[art] || TOENE.dreiklang;
+    if (t.datei) {
+      const start = Date.now();
+      tonLaden(art).then((b) => {
+        if (b) {
+          const q = audio.createBufferSource(), g = audio.createGain();
+          q.buffer = b; g.gain.value = .9; q.connect(g); g.connect(audio.destination); q.start();
+        } else if (Date.now() - start < 3000) spieleNoten(t);
+      });
+      return;
+    }
+    spieleNoten(t);
+  }
+  function spieleNoten(t) {
+    const t0 = audio.currentTime, laut = t.laut || .4;
     t.noten.forEach(([f, d, dauer]) => {
       const o = audio.createOscillator(), g = audio.createGain();
       o.type = t.form; o.frequency.value = f;
