@@ -108,6 +108,9 @@ button { font: inherit; color: inherit; }
 .prozent { font-size: 12.5px; font-weight: 600; }
 .heute { color: var(--accent); }
 .leer { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+.neu { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .04em; vertical-align: 2px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 60; background: var(--fg); color: var(--bg);
+  padding: 10px 14px; border-radius: 8px; font-size: 13.5px; max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
 
 /* Detailseite */
 .detail { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -345,6 +348,16 @@ function angeboteAus(ereignisse) {
 
   // ---------- Zustand ----------
   let angebote = [], live = false, stand = null, reiter = lies('reiter', 'alle'), sortierung = lies('sort', 'laden'), offen = null;
+  // „NEU“ = kam an, seit du die App zuletzt verlassen hast
+  let gesehenBis = Number(lies('gesehenBis', '0')) || Date.now();
+  const merkeGesehen = () => schreib('gesehenBis', String(Date.now()));
+  if (!lies('gesehenBis', '')) merkeGesehen();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') merkeGesehen(); else gesehenBis = Number(lies('gesehenBis', '0')) || gesehenBis; });
+  let zielTour = null;
+  function hinweis(text) {
+    const t = h('div', { class: 'toast', role: 'status', text: text });
+    document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+  }
   const REITER = [['alle', 'Alle'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
   $('sortierung').value = sortierung;
   $('sortierung').addEventListener('change', (e) => { sortierung = e.target.value; schreib('sort', sortierung); zeigeListe(); });
@@ -382,7 +395,7 @@ function angeboteAus(ereignisse) {
     const unten = [a.firma, a.lm != null ? zahl(a.lm) + ' m' : '', a.t != null ? zahl(a.t) + ' t' : '', a.art || ''].filter(Boolean).join(' · ');
     return h('button', { class: 'zeile f-' + a.farbe, type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
       h('span', { class: 'streifen', 'aria-hidden': 'true' }),
-      h('span', { class: 'c-ort' }, h('b', { text: a.start }), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
+      h('span', { class: 'c-ort' }, h('b', null, a.start, a.zeit > gesehenBis ? h('span', { class: 'neu', text: 'NEU' }) : null), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
       h('span', { class: 'pfeil', 'aria-hidden': 'true', text: '→' }),
       h('span', { class: 'c-ort' }, h('b', { text: a.ziel }), wann(a.entladen, '', a.entladenText)),
       h('span', { class: 'c-km' }, h('b', { class: 'num', text: a.lastKm != null ? zahl(a.lastKm, 0) : '–' }), h('span', { text: a.leerKm != null ? '+' + zahl(a.leerKm, 0) : '' })),
@@ -479,13 +492,25 @@ function angeboteAus(ereignisse) {
     $('stand').textContent = standText;
     $('beispiel').hidden = live;
     zeigeReiter(); zeigeListe();
-    if (offen) { const neu = angebote.find((a) => a.id === offen.id); if (neu) oeffne(neu); }
+    if (zielTour) {
+      // Aus einer Benachrichtigung geöffnet: diese Tour direkt zeigen
+      const a = angebote.find((x) => x.id === zielTour);
+      zielTour = null;
+      if (a) oeffne(a); else if (live) hinweis('Diese Tour ist nicht mehr verfügbar.');
+    } else if (offen) { const neu = angebote.find((a) => a.id === offen.id); if (neu) oeffne(neu); }
   }
   // Persönlicher Link: Kanal steht hinter dem # (geht nicht an den Server) – einmal merken, dann aus der Adresse entfernen
-  try {
-    const k = decodeURIComponent((location.hash || '').slice(1));
-    if (/^[A-Za-z0-9_-]{6,64}$/.test(k)) { schreib('kanal', k); history.replaceState(null, '', location.pathname + location.search); }
-  } catch (e) { /* egal */ }
+  // #tour-<id> = aus einer Benachrichtigung: diese Tour öffnen
+  function adresseLesen() {
+    try {
+      const k = decodeURIComponent((location.hash || '').slice(1));
+      if (/^tour-[A-Za-z0-9_-]+$/.test(k)) zielTour = k.slice(5);
+      else if (/^[A-Za-z0-9_-]{6,64}$/.test(k)) schreib('kanal', k);
+      if (k) history.replaceState(null, '', location.pathname + location.search);
+    } catch (e) { /* egal */ }
+  }
+  adresseLesen();
+  window.addEventListener('hashchange', () => { adresseLesen(); if (zielTour) lade(); });
   lade();
   setInterval(() => { if (lies('kanal', '') && document.visibilityState === 'visible') lade(); }, 60000);
 })();
