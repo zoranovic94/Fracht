@@ -330,6 +330,10 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 .rb-std i { width: 100%; min-height: 2px; background: var(--head2, #2f5c84); border-radius: 4px 4px 0 0; } .rb-std span { font-size: 10.5px; color: var(--muted); }
 .rb-hinweis { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rb-auf { border: 0; background: transparent; color: var(--link); font: 700 14px var(--font); padding: 4px 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
+/* 4.8: Warnung vor Timocom am Handy */
+.warn-ebene .schleier { z-index: 80; } .warn-ebene .blatt { z-index: 81; display: grid; gap: 12px; }
+.warnung p { color: var(--fg) !important; font-size: 14px !important; }
+.warnung .trotzdem { align-self: center; color: var(--muted); font-weight: 600; font-size: 14px; padding: 9px 6px; }
 /* 4.4: Rückladungs-Schild und Firmen-Gedächtnis */
 .trend.r-gut { background: #1e8e4a; color: #fff; }
 .trend.r-mittel { background: #f5c400; color: #3a2f00; }
@@ -444,12 +448,15 @@ function parseMeldung(msg) {
     leerKm: null, lastKm: null, heimKm: null, anfahrtAb: '', lm: null, t: null, stopps: null,
     ueber: null, euroKm: null, vorher: '', zahlung: null, mindest: null, vorschlag: null,
     firma: '', sterne: '', name: '', tel: '', mobil: '', mail: '', info: '', hinweise: [],
-    telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel), ladenAb: null, ende: null, punkte: []
+    telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel), ladenAb: null, ende: null, punkte: [], details: []
   };
   const kl = /#tour-[A-Za-z0-9_-]+\.(\d+)\.(\d+)/.exec(String(msg.click || ''));
   if (kl) { a.ladenAb = Number(kl[1]) * 60000; a.ende = Number(kl[2]) * 60000; }
   // Koordinaten für die Karte (.wA…~L…~E…): A = LKW-Standort, L = Ladestelle, E = Entladestelle
   const kw = /\.w([ALE][-\d.,~ALE]+)/.exec(String(msg.click || ''));
+  // ab Wächter 9.9: ganze Beschreibung aus Timocom (Ware, Zahlung, Lademitteltausch, Bemerkung) hinten am Link: !i=<Text>
+  const ki = /!i=([^#]*)$/.exec(String(msg.click || ''));
+  if (ki) { try { a.details = decodeURIComponent(ki[1]).split('\n').map((z) => { const m = /^([^:]{2,20}):\s*(.*)$/.exec(z); return m ? [m[1], m[2]] : ['Info', z]; }).filter((x) => x[1]); } catch (e) { /* kaputt: ohne */ } }
   // ab Wächter 9.7 mit Postleitzahl: L51.4556,7.0116,45127
   if (kw) kw[1].split('~').forEach((x) => { const m = /^([ALE])(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,(\d{4,5}))?$/.exec(x); if (m) a.punkte.push({ typ: m[1], lat: Number(m[2]), lon: Number(m[3]), plz: m[4] || '' }); });
   { const l = a.punkte.find((x) => x.typ === 'L'), e = a.punkte.filter((x) => x.typ === 'E').pop(); a.plzStart = (l && l.plz) || ''; a.plzZiel = (e && e.plz) || ''; }
@@ -524,7 +531,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.7 (24.11.)';
+  const APP_VERSION = '4.8 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1028,6 +1035,9 @@ function angeboteAus(ereignisse) {
     if (istNeu(a)) { alsGelesen(a); setTimeout(() => { zeigeReiter(); zeigeListe(); }, 0); }
     const eb = $('ebene'); eb.textContent = '';
     const feld = (dt, dd) => (dd ? h('div', { class: 'feld' }, h('dt', { text: dt }), h('dd', null, dd)) : null);
+    // Timocom erlaubt nur ein Gerät gleichzeitig: Öffnen am Handy meldet den PC ab – vorher warnen
+    const timocomKnopf = (url) => h('a', { class: 'knopf' + (url ? '' : ' aus'), href: url || null, rel: 'noopener',
+      onclick: (e) => { if (!url) return; e.preventDefault(); timocomWarnung(url); } }, h('span', { 'aria-hidden': 'true', text: '↗' }), 'In Timocom');
     const knopf = (sym, text, url) => h('a', { class: 'knopf' + (url ? '' : ' aus'), href: url || null, target: url && /^https:/.test(url) ? '_blank' : null, rel: 'noopener' }, h('span', { 'aria-hidden': 'true', text: sym }), text);
     const kmText = [a.lastKm != null ? zahl(a.lastKm, 0) + ' km beladen' : '', a.leerKm != null ? zahl(a.leerKm, 0) + ' km Anfahrt' + (a.anfahrtAb ? ' ab ' + a.anfahrtAb : '') : '', a.heimKm != null ? zahl(a.heimKm, 0) + ' km heim' : ''].filter(Boolean).join(' · ');
     const seite = h('div', { class: 'detail', role: 'dialog', 'aria-modal': 'true', 'aria-label': a.start + ' nach ' + a.ziel },
@@ -1038,7 +1048,7 @@ function angeboteAus(ereignisse) {
           h('span', { class: 'proz num', text: a.deckung != null ? a.deckung + ' %' : '' }),
           h('span', { class: 'klein', text: [a.preis != null ? FARB_NAME[a.farbe] : 'ohne Preis', a.art].concat(a.symbole).filter(Boolean).join(' · ') }),
           h('span', { class: 'klein num', text: a.ueber != null ? (a.ueber >= 0 ? '+' : '−') + euro(Math.abs(a.ueber)) + ' über Kosten' : (a.mindest ? 'mind. ' + euro(a.mindest) : '') })),
-        h('div', { class: 'knoepfe' }, knopf('📞', 'Anrufen', a.telUrl), knopf('✉', 'E-Mail-Anfrage', a.mailUrl), knopf('↗', 'In Timocom', a.timocomUrl)),
+        h('div', { class: 'knoepfe' }, knopf('📞', 'Anrufen', a.telUrl), knopf('✉', 'E-Mail-Anfrage', a.mailUrl), timocomKnopf(a.timocomUrl)),
         karteFuer(a),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Kontaktangaben' }),
           feld('Unternehmen', (a.firma || '–') + (a.sterne ? '  ★ ' + a.sterne : '')), feld('Ansprechpartner', a.name), feld('Telefon', a.tel), feld('Mobil', a.mobil), feld('E-Mail', a.mail)),
@@ -1048,7 +1058,8 @@ function angeboteAus(ereignisse) {
           h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↑' }), h('div', null, h('div', { class: 'ort', text: (a.plzZiel ? a.plzZiel + ' ' : '') + a.ziel }), h('div', { class: 'zeit', text: (datumLang(a.entladen) || a.entladenText) + (a.stopps ? ' · ' + a.stopps + ' Stopps' : '') }))),
           kmText ? h('div', { class: 'notiz', text: kmText }) : null),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Frachtbeschreibung' }),
-          feld('Lademeter', a.lm != null ? zahl(a.lm) + ' m' : ''), feld('Gewicht', a.t != null ? zahl(a.t) + ' t' : ''), feld('Warenart / Info', a.info)),
+          feld('Lademeter', a.lm != null ? zahl(a.lm) + ' m' : ''), feld('Gewicht', a.t != null ? zahl(a.t) + ' t' : ''),
+          a.details.length ? a.details.map(([k, v]) => feld(k === 'Ware' ? 'Warenart' : k, v)) : feld('Warenart / Info', a.info)),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Frachtpreis' }),
           feld('Preis', a.preis != null ? euro(a.preis) + (a.vorher ? (trendVon(a) === 1 ? ' ↑ erhöht' : trendVon(a) === -1 ? ' ↓ gesenkt' : '') + ' (vorher ' + a.vorher + ')' : '') : 'abklären'),
           feld('Vorschlag', a.preis == null && a.vorschlag ? euro(a.vorschlag) + (a.mindest ? ' · mindestens ' + euro(a.mindest) : '') : ''),
@@ -1060,6 +1071,20 @@ function angeboteAus(ereignisse) {
           h('div', { class: 'notiz', text: 'Gemeldet ' + new Date(a.zeit).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr' }))));
     eb.appendChild(seite);
     seite.querySelector('.d-kopf .ikon').focus();
+  }
+  function timocomWarnung(url) {
+    const alt = document.querySelector('.warn-ebene'); if (alt) alt.remove();
+    const weg = () => box.remove();
+    const box = h('div', { class: 'warn-ebene' },
+      h('div', { class: 'schleier', onclick: () => weg() }),
+      h('div', { class: 'blatt warnung', role: 'alertdialog', 'aria-label': 'Timocom am Handy öffnen?' },
+        h('h2', { text: '⚠️ Timocom am Handy öffnen?' }),
+        h('p', { text: 'Timocom lässt dich nur auf einem Gerät gleichzeitig arbeiten. Öffnest du die Tour hier, wirst du am PC abgemeldet – dann meldet der Fracht-Wächter keine Touren mehr, bis du dich am PC wieder anmeldest.' }),
+        h('p', { text: 'Alles Wichtige steht meist schon hier in der Tour: Ware, Bemerkung, Zahlungsziel und Kontakt.' }),
+        h('div', { class: 'reihe' },
+          h('button', { type: 'button', class: 'haupt', onclick: () => weg(), text: 'Lieber nicht' }),
+          h('a', { class: 'trotzdem', href: url, target: '_blank', rel: 'noopener', onclick: () => setTimeout(weg, 300), text: 'Trotzdem öffnen' }))));
+    document.body.appendChild(box);
   }
   function schliesse() { offen = null; karteWeg(); $('ebene').textContent = ''; }
 
@@ -1372,7 +1397,7 @@ function angeboteAus(ereignisse) {
   function adresseLesen() {
     try {
       const k = decodeURIComponent((location.hash || '').slice(1));
-      const t = /^tour-([A-Za-z0-9_-]+)(?:\..*)?$/.exec(k);
+      const t = /^tour-([A-Za-z0-9_-]+)(?:[.!][\s\S]*)?$/.exec(k);
       if (t) zielTour = t[1];
       else {
         const kt = /^([A-Za-z0-9_-]{6,64})(?:\+(tk_[A-Za-z0-9]+))?$/.exec(k);
