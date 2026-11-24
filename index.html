@@ -307,6 +307,29 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 .p-E span { background: #c8102e; }
 .p-A span { background: #fff; font-size: 16px; border-color: #64748b; }
 .leaflet-container { font-family: var(--font); }
+/* 4.1: Übersichtskarte und Wischen */
+.chip.ansicht { margin-left: 2px; white-space: nowrap; }
+.chip.ansicht[aria-pressed="true"] { background: var(--head); color: #fff; }
+body.karten-an .spalten, body.karten-an #liste { display: none; }
+#uebersicht { margin: 0 10px; border-radius: 14px; overflow: hidden; background: var(--surface); box-shadow: var(--karte-schatten); }
+#uebersicht[hidden] { display: none; }
+#ueb-karte { height: max(380px, calc(100dvh - 290px)); z-index: 0; background: color-mix(in srgb, var(--muted) 12%, var(--surface)); }
+.ueb-punkt span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font: 800 13px/1 var(--font); color: #fff; border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+.u-gold span { background: #18212d; border-color: #ffcc33; font-size: 15px; }
+.u-gruen span { background: #1e8e4a; }
+.u-gelb span { background: #fff; color: #3a2f00; border-color: #e0b400; }
+.u-anfrage span { background: #1f6feb; }
+.u-rot span { background: #c8102e; }
+.u-neu span { outline: 3px solid var(--accent); outline-offset: 1px; }
+.ueb-fenster { display: grid; gap: 3px; font: 14px/1.35 var(--font); color: #1e1a1b; }
+.ueb-fenster b { font-size: 15px; }
+.ueb-fenster .klein { font-size: 12.5px; color: #5b6470; }
+.ueb-auf { margin-top: 6px; border: 0; border-radius: 10px; padding: 9px 12px; background: #1f3a56; color: #fff; font: 600 14px var(--font); cursor: pointer; }
+@media (prefers-reduced-motion: no-preference) {
+  .von-rechts { animation: vonRechts .18s ease-out; } .von-links { animation: vonLinks .18s ease-out; }
+  @keyframes vonRechts { from { opacity: .3; transform: translateX(28px); } }
+  @keyframes vonLinks { from { opacity: .3; transform: translateX(-28px); } }
+}
 /* 4.0: keine Farbstreifen mehr – die Karte selbst zeigt die Farbe; Prozent-Schilder klar unterschiedlich */
 .tabelle .zeile .streifen { background: transparent; }
 .tabelle .zeile.f-gold .prozent { background: transparent; color: #ffd45a; box-shadow: inset 0 0 0 1.5px #ffcc33; }
@@ -335,6 +358,7 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
     <option value="preis">Preis</option>
     <option value="km">km</option>
   </select>
+  <button type="button" class="chip ansicht" id="ansicht" aria-pressed="false">🗺 Karte</button>
   <span class="hinweis" id="anzahl"></span>
 </div>
 <div class="ueberblick" id="ueberblick" hidden></div>
@@ -343,6 +367,7 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 <main class="tabelle" id="tabelle">
   <div class="spalten" aria-hidden="true"><span></span><span>Start</span><span></span><span>Ziel</span><span class="c-km">km</span><span>Preis</span></div>
   <div id="liste"></div>
+  <div id="uebersicht" hidden><div id="ueb-karte"></div><div class="karte-info" id="ueb-info"></div></div>
 </main>
 
 <div id="ebene"></div>
@@ -463,7 +488,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.0 (24.11.)';
+  const APP_VERSION = '4.1 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -761,6 +786,97 @@ function angeboteAus(ereignisse) {
       box.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(reiter === k), onclick: () => { reiter = k; schreib('reiter3', k); zeigeReiter(); zeigeListe(); } },
         name, h('b', { class: 'num' + (imReiter(k).some(istNeu) ? ' hat-neu' : ''), text: String(n) })));
     });
+    // aktiven Reiter in den sichtbaren Bereich schieben (wichtig beim Wischen)
+    try { const an = box.querySelector('[aria-selected="true"]'); if (an) box.scrollLeft = Math.max(0, an.offsetLeft - (box.clientWidth - an.offsetWidth) / 2); } catch (e) { /* egal */ }
+  }
+
+  // ---------- Wischen: nach links = nächster Reiter, nach rechts = vorheriger ----------
+  let wischStart = null;
+  document.addEventListener('touchstart', (e) => {
+    wischStart = null;
+    if (offen || e.touches.length !== 1) return;
+    const z = e.target;
+    if (z.closest && z.closest('#ebene, .reiter, .leaflet-container, select, .unten, .blatt, .kopf')) return;
+    wischStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const s0 = wischStart; wischStart = null;
+    if (!s0 || offen) return;
+    const dx = e.changedTouches[0].clientX - s0.x, dy = e.changedTouches[0].clientY - s0.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2 || Date.now() - s0.t > 700) return;
+    const i = REITER.findIndex((r) => r[0] === reiter), neu = i + (dx < 0 ? 1 : -1);
+    if (neu < 0 || neu >= REITER.length) return;
+    reiter = REITER[neu][0]; schreib('reiter3', reiter);
+    zeigeReiter(); zeigeListe();
+    const ziel = kartenAnsicht ? $('uebersicht') : $('liste');
+    ziel.classList.remove('von-rechts', 'von-links'); void ziel.offsetWidth; ziel.classList.add(dx < 0 ? 'von-rechts' : 'von-links');
+  }, { passive: true });
+
+  // ---------- Übersichtskarte: alle Touren des Reiters als Punkte an der Ladestelle ----------
+  let kartenAnsicht = false, ueb = null, uebStand = '', uebLauf = 0;
+  $('ansicht').addEventListener('click', () => {
+    kartenAnsicht = !kartenAnsicht;
+    document.body.classList.toggle('karten-an', kartenAnsicht);
+    $('uebersicht').hidden = !kartenAnsicht;
+    $('ansicht').setAttribute('aria-pressed', String(kartenAnsicht));
+    $('ansicht').textContent = kartenAnsicht ? '☰ Liste' : '🗺 Karte';
+    uebStand = '';
+    zeigeListe();
+  });
+  async function zeigeUebersicht(l) {
+    const info = $('ueb-info');
+    const standNeu = reiter + '|' + (farbFilter || '') + '|' + l.map((a) => a.id).join(',');
+    if (standNeu === uebStand) return; // nichts Neues: Karte (und offenes Fenster) so lassen
+    const ansichtNeu = !ueb || ueb.ansicht !== reiter + '|' + (farbFilter || '');
+    uebStand = standNeu;
+    const lauf = ++uebLauf;
+    let L;
+    try { L = await leafletLaden(); } catch (e) { info.textContent = 'Karte konnte nicht geladen werden (keine Verbindung?).'; uebStand = ''; return; }
+    if (lauf !== uebLauf) return;
+    if (!ueb) {
+      const map = L.map($('ueb-karte'), { zoomControl: true });
+      map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
+      map.setView([51.2, 9.5], 6);
+      ueb = { map: map, ebene: L.layerGroup().addTo(map), ansicht: '' };
+    }
+    ueb.ansicht = reiter + '|' + (farbFilter || '');
+    setTimeout(() => ueb.map.invalidateSize(), 50);
+    ueb.ebene.clearLayers();
+    info.textContent = l.length ? 'Touren werden eingezeichnet …' : 'Keine Touren in diesem Reiter.';
+    const SYM = { gold: '🥇', gruen: '€', gelb: '€', anfrage: '?', rot: '€' };
+    const belegt = {}, grenzen = [], lkw = {};
+    let ohne = 0;
+    // schlechteste zuerst zeichnen, damit die besten oben liegen
+    for (const a of l.slice().reverse()) {
+      let p = (a.punkte || []).find((x) => x.typ === 'L');
+      const genau = !!p;
+      if (!p) p = await ortSuchen(a.start);
+      if (lauf !== uebLauf) return;
+      if (!p) { ohne++; continue; }
+      const st = (a.punkte || []).find((x) => x.typ === 'A'); if (st) lkw[st.lat.toFixed(3) + ',' + st.lon.toFixed(3)] = st;
+      // mehrere Touren am selben Ort leicht versetzen, damit man jede antippen kann
+      const key = p.lat.toFixed(2) + ',' + p.lon.toFixed(2), n = belegt[key] = (belegt[key] || 0) + 1;
+      const w = (n - 1) * 2.4, r = n > 1 ? 0.012 * Math.ceil((n - 1) / 6 + 0.5) : 0;
+      const lat = p.lat + r * Math.sin(w), lon = p.lon + r * 1.6 * Math.cos(w);
+      grenzen.push([lat, lon]);
+      const inhalt = h('div', { class: 'ueb-fenster' },
+        h('b', { text: a.start + ' → ' + a.ziel }),
+        h('div', { text: (a.preis != null ? euro(a.preis) + (a.deckung != null ? ' · ' + a.deckung + ' %' : '') : 'Preis abklären') + (a.lastKm ? ' · ' + zahl(a.lastKm, 0) + ' km' : '') }),
+        a.ladenText ? h('div', { class: 'klein', text: 'Laden ' + a.ladenText }) : null,
+        !genau ? h('div', { class: 'klein', text: 'Ort ungefähr (Stadtmitte)' }) : null,
+        h('button', { type: 'button', class: 'ueb-auf', onclick: () => oeffne(a), text: 'Tour öffnen ›' }));
+      L.marker([lat, lon], { icon: L.divIcon({ className: 'ueb-punkt u-' + a.farbe + (istNeu(a) ? ' u-neu' : ''), html: '<span>' + (SYM[a.farbe] || '•') + '</span>', iconSize: [30, 30], iconAnchor: [15, 15] }),
+        zIndexOffset: a.farbe === 'gold' ? 600 : a.farbe === 'gruen' ? 400 : a.farbe === 'gelb' ? 200 : 0, title: a.start + ' → ' + a.ziel })
+        .bindPopup(inhalt, { closeButton: false, maxWidth: 240 }).addTo(ueb.ebene);
+    }
+    Object.values(lkw).forEach((st) => { grenzen.push([st.lat, st.lon]);
+      L.marker([st.lat, st.lon], { icon: L.divIcon({ className: 'punkt p-A', html: '<span>🚛</span>', iconSize: [30, 30], iconAnchor: [15, 15] }), zIndexOffset: 800, interactive: false }).addTo(ueb.ebene); });
+    // Ortssuche kurz gestört? Einmal nach 15 Sekunden nochmal versuchen
+    if (ansichtNeu) ueb.nochmal = false;
+    if (ohne && !ueb.nochmal) { ueb.nochmal = true; setTimeout(() => { uebStand = ''; if (kartenAnsicht) zeigeListe(); }, 15000); }
+    if (grenzen.length && ansichtNeu) ueb.map.fitBounds(L.latLngBounds(grenzen), { padding: [36, 36], maxZoom: 11 });
+    info.textContent = grenzen.length ? 'Jeder Punkt ist eine Ladestelle – antippen zeigt die Tour.' + (ohne ? ' ' + (ohne === 1 ? '1 Tour' : ohne + ' Touren') + ' ohne bekannten Ort ' + (ohne === 1 ? 'fehlt.' : 'fehlen.') : '') : (l.length ? 'Für diese Touren ist kein Ort bekannt.' : 'Keine Touren in diesem Reiter.');
   }
 
   function zeile(a) {
@@ -812,6 +928,7 @@ function angeboteAus(ereignisse) {
     const alleImReiter = imReiter(reiter);
     zeigeUeberblick(alleImReiter);
     const l = sortiere(farbFilter ? alleImReiter.filter((a) => a.farbe === farbFilter) : alleImReiter);
+    if (kartenAnsicht) { $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote'); zeigeUebersicht(l); return; }
     const box = $('liste'); box.textContent = '';
     if (!l.length) box.appendChild(h('div', { class: 'leer', text: reiter === 'lalie' ? 'Gerade keine Tour, die heute geladen und bis 5 Uhr morgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : reiter === 'mlalie' ? 'Gerade keine Tour, die morgen geladen und bis 5 Uhr übermorgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
     // „Beste zuerst“: eine durchgehende Liste, beste Tour ganz oben – neue sind nur mit NEU markiert
