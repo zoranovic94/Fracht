@@ -349,7 +349,7 @@ function angeboteAus(ereignisse) {
   }
 
   // ---------- Zustand ----------
-  let angebote = [], live = false, stand = null, reiter = lies('reiter2', 'lalie'), sortierung = lies('sort', 'laden'), offen = null;
+  let angebote = [], live = false, stand = null, reiter = lies('reiter3', 'alle'), sortierung = lies('sort', 'laden'), offen = null;
   // „NEU“ = kam an, seit du die App zuletzt verlassen hast
   let gesehenBis = Number(lies('gesehenBis', '0')) || Date.now();
   const merkeGesehen = () => schreib('gesehenBis', String(Date.now()));
@@ -360,7 +360,7 @@ function angeboteAus(ereignisse) {
     const t = h('div', { class: 'toast', role: 'status', text: text });
     document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
   }
-  const REITER = [['lalie', '☀️ Heute La-Lie'], ['alle', 'Alle'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
+  const REITER = [['alle', 'Alle'], ['lalie', '☀️ Heute La-Lie'], ['heute', '⚡ Heute laden'], ['morgen', '📅 Ab morgen'], ['preis', '🔵 Preis abklären']];
   // Heute La-Lie: heute laden und spätestens bis 5 Uhr morgen früh abladen können (Entladefenster öffnet bis dahin)
   function istLaLie(a) {
     const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
@@ -390,7 +390,7 @@ function angeboteAus(ereignisse) {
     const box = $('reiter'); box.textContent = '';
     REITER.forEach(([k, name]) => {
       const n = imReiter(k).length;
-      box.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(reiter === k), onclick: () => { reiter = k; schreib('reiter2', k); zeigeReiter(); zeigeListe(); } },
+      box.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(reiter === k), onclick: () => { reiter = k; schreib('reiter3', k); zeigeReiter(); zeigeListe(); } },
         name, h('b', { class: 'num', text: String(n) })));
     });
   }
