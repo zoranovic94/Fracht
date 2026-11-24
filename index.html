@@ -318,7 +318,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '3.0 (24.11.)';
+  const APP_VERSION = '3.1 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -522,10 +522,23 @@ function angeboteAus(ereignisse) {
   setTimeout(herzschlag, 3000);
   // Roter Hinweis unten, solange der Ton gesperrt ist (z. B. direkt nach einem App-Update): einmal tippen gibt ihn frei
   const sperre = h('button', { type: 'button', class: 'tonsperre', hidden: 'hidden', onclick: () => { audioFreischalten(); bildschirmAn(); } },
-    '🔇 Ton ist noch gesperrt – einmal hier tippen. Bis dahin klingelt ntfy.');
+    amHandy ? '🔇 Ton noch gesperrt – einmal tippen. Bis dahin klingelt ntfy.' : '🔇 Ton noch gesperrt – einmal tippen.');
   document.body.appendChild(sperre);
   function tonSperreZeigen() { sperre.hidden = !(tonAn && document.visibilityState === 'visible' && !kannTon()); }
-  setTimeout(tonSperreZeigen, 1500);
+  // Gleich beim Start versuchen, den Ton freizuschalten: Die installierte App auf dem Handy darf das meist ohne Antippen.
+  // Nur wenn der Browser es nicht erlaubt, erscheint der rote Hinweis.
+  function tonVersuch() {
+    if (!tonAn) return;
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      const frei = () => { if (kannTon()) { tonSperreZeigen(); if (!offenGemeldet) { letzterHerzschlag = 0; herzschlag(); } tonLaden(tonArt); tonLaden(tonArtLaLie); } };
+      if (audio.state === 'suspended') audio.resume().then(frei).catch(() => { /* egal */ });
+      frei();
+    } catch (e) { /* dann eben nach dem ersten Antippen */ }
+  }
+  setTimeout(tonVersuch, 300);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(tonVersuch, 300); });
+  setTimeout(tonSperreZeigen, 2000);
 
   function hinweis(text) {
     const t = h('div', { class: 'toast', role: 'status', text: text });
