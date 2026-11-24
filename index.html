@@ -436,6 +436,21 @@ body.karten-an .spalten, body.karten-an #liste { display: none; }
 .tabelle .zeile.f-gelb .prozent { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--fg); }
 .ueberblick .chip.c-gelb { background: var(--surface); box-shadow: var(--karte-schatten); }
 .d-inhalt .preisblock.f-gelb { box-shadow: var(--karte-schatten); }
+/* 5.2: 🥇 Gold als echte Goldkarte („Goldbarren“): helles, glänzendes Gold mit dunkler Schrift – in hell und dunkel gleich */
+.zeile.f-gold, .preisblock.f-gold { background: linear-gradient(115deg, rgba(255,255,255,0) 28%, rgba(255,255,255,.42) 45%, rgba(255,255,255,0) 60%), linear-gradient(135deg, #fbe7a1 0%, #f2c94c 38%, #dca826 72%, #c38f12 100%); box-shadow: var(--karte-schatten), inset 0 0 0 1px rgba(140,95,0,.35); color: #2b1d00; }
+.zeile.f-gold.klingel { box-shadow: var(--karte-schatten), inset 0 0 0 3px var(--accent); }
+.zeile.f-gold .c-ort b, .zeile.f-gold .c-km b, .zeile.f-gold .c-preis b { color: #2b1d00; }
+.zeile.f-gold .c-ort .uhr, .zeile.f-gold .pfeil, .zeile.f-gold small, .zeile.f-gold span span { color: #574006; }
+.zeile.f-gold small { border-top-color: rgba(90,60,0,.28); }
+.tabelle .zeile.f-gold .prozent { background: #2b1d00; color: #ffd45a; box-shadow: none; }
+.zeile.f-gold .tag.t-morgen, .zeile.f-gold .tag.t-spaeter { background: rgba(60,40,0,.15); color: #2b1d00; }
+.zeile.f-gold small .trend.ab, .zeile.f-gold small .trend.neu-preis, .zeile.f-gold small .trend.r-heim { background: rgba(60,40,0,.15); color: #2b1d00; }
+.zeile.f-gold small .trend.r-schlecht { background: rgba(200,16,46,.15); color: #9b0c22; }
+.zeile.f-gold small .trend.r-mittel { background: #fff3c4; color: #3a2f00; }
+.preisblock.f-gold .gross, .preisblock.f-gold .proz { color: #2b1d00; }
+.preisblock.f-gold .klein { color: #574006; }
+.chip.c-gold { background: linear-gradient(135deg, #f8dc7a, #d9a520); color: #2b1d00; }
+.u-gold span { background: linear-gradient(135deg, #f8dc7a, #d9a520); color: #2b1d00; border-color: #fff; }
 </style>
 
 <div id="start" aria-hidden="true">
@@ -662,7 +677,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '5.1 (24.11.)';
+  const APP_VERSION = '5.2 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
