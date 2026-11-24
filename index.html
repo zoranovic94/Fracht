@@ -307,6 +307,29 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 .p-E span { background: #c8102e; }
 .p-A span { background: #fff; font-size: 16px; border-color: #64748b; }
 .leaflet-container { font-family: var(--font); }
+/* 4.2: Preis-Schild und Tagesrückblick */
+.zeile small .trend { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+.trend.auf { background: #1e8e4a; color: #fff; }
+.trend.ab { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--fg); }
+.trend.neu-preis { background: color-mix(in srgb, var(--link) 16%, transparent); color: var(--link); }
+.zeile.f-gold small .trend.ab, .zeile.f-gold small .trend.neu-preis { background: rgba(255,255,255,.16); color: #fff; }
+.werkzeug { flex-wrap: nowrap; } .werkzeug label { display: none; } #rueckblick { padding-inline: 10px; }
+.rueckblick { display: grid; gap: 10px; }
+.rueckblick h3 { margin: 6px 0 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+.rb-gitter { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .rb-gitter.vier { grid-template-columns: repeat(4, 1fr); }
+.rb-kachel { background: var(--bg); border-radius: 12px; padding: 10px 8px; display: grid; gap: 2px; text-align: center; }
+.rb-kachel b { font-size: 20px; font-weight: 800; } .rb-kachel span { font-size: 12px; color: var(--muted); }
+.rb-kachel.gross { background: var(--head); color: #fff; } .rb-kachel.gross span { color: rgba(255,255,255,.8); }
+.rb-kachel.k-gold { background: #18212d; color: #ffd45a; } .rb-kachel.k-gold span { color: #e9dcb4; }
+.rb-kachel.k-gruen { background: var(--gruen-bg); } .rb-kachel.k-blau { background: var(--anfrage-bg); }
+.rb-liste { display: grid; gap: 6px; }
+.rb-tour { text-align: left; border: 0; border-radius: 12px; background: var(--bg); color: var(--fg); padding: 10px 12px; display: grid; gap: 2px; font: inherit; cursor: pointer; }
+.rb-tour span { font-size: 12.5px; color: var(--muted); } .rb-tour.weg { opacity: .6; cursor: default; }
+.rb-balken { display: flex; align-items: flex-end; gap: 4px; height: 90px; }
+.rb-std { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.rb-std i { width: 100%; min-height: 2px; background: var(--head2, #2f5c84); border-radius: 4px 4px 0 0; } .rb-std span { font-size: 10.5px; color: var(--muted); }
+.rb-hinweis { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rb-auf { border: 0; background: transparent; color: var(--link); font: 700 14px var(--font); padding: 4px 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
 /* 4.1: Übersichtskarte und Wischen */
 .chip.ansicht { margin-left: 2px; white-space: nowrap; }
 .chip.ansicht[aria-pressed="true"] { background: var(--head); color: #fff; }
@@ -359,6 +382,7 @@ body.karten-an .spalten, body.karten-an #liste { display: none; }
     <option value="km">km</option>
   </select>
   <button type="button" class="chip ansicht" id="ansicht" aria-pressed="false">🗺 Karte</button>
+  <button type="button" class="chip ansicht" id="rueckblick" aria-label="Tagesrückblick" title="Tagesrückblick">📊</button>
   <span class="hinweis" id="anzahl"></span>
 </div>
 <div class="ueberblick" id="ueberblick" hidden></div>
@@ -488,7 +512,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.1 (24.11.)';
+  const APP_VERSION = '4.2 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -905,7 +929,19 @@ function angeboteAus(ereignisse) {
       h('span', { class: 'c-km' }, h('b', { class: 'num', text: a.lastKm != null ? zahl(a.lastKm, 0) : '–' }), h('span', { text: a.leerKm != null ? '+' + zahl(a.leerKm, 0) : '' })),
       h('span', { class: 'c-preis' }, h('b', { class: 'num', text: a.preis != null ? euro(a.preis) : 'abklären' }),
         h('span', { class: 'prozent num', text: a.deckung != null ? (FARB_SYMBOL[a.farbe] ? FARB_SYMBOL[a.farbe] + ' ' : '') + a.deckung + ' %' : (a.vorschlag ? '~' + euro(a.vorschlag) : '') })),
-      unten ? h('small', { text: unten }) : null);
+      unten || trendVon(a) ? h('small', null, trendSchild(a), unten) : null);
+  }
+  // Preis geändert? „vorher 900 €“ steht in der Meldung des Wächters. +1 = gestiegen, -1 = gesenkt, 2 = vorher ohne Preis
+  function trendVon(a) {
+    if (!a.vorher || a.preis == null) return 0;
+    if (/ohne/.test(a.vorher)) return 2;
+    const v = Number(String(a.vorher).replace(/[^\d]/g, ''));
+    return v && a.preis > v ? 1 : v && a.preis < v ? -1 : 0;
+  }
+  function trendSchild(a) {
+    const t = trendVon(a);
+    if (!t) return null;
+    return h('span', { class: 'trend ' + (t === 1 ? 'auf' : t === -1 ? 'ab' : 'neu-preis'), text: t === 1 ? '↑ Preis erhöht · vorher ' + a.vorher : t === -1 ? '↓ Preis gesenkt · vorher ' + a.vorher : '€ jetzt mit Preis' });
   }
 
   // Überblick: wie viele 🥇/🟢/🟡/🔵 im Reiter – antippen zeigt nur diese Farbe, nochmal antippen zeigt wieder alle
@@ -930,6 +966,11 @@ function angeboteAus(ereignisse) {
     const l = sortiere(farbFilter ? alleImReiter.filter((a) => a.farbe === farbFilter) : alleImReiter);
     if (kartenAnsicht) { $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote'); zeigeUebersicht(l); return; }
     const box = $('liste'); box.textContent = '';
+    if (live && new Date().getHours() >= 17 && lies('rbGesehen', '') !== tagKey() && Object.keys(tagLesen()).length) {
+      box.appendChild(h('div', { class: 'gruppe rb-hinweis' },
+        h('button', { type: 'button', class: 'rb-auf', onclick: () => { schreib('rbGesehen', tagKey()); rueckblick(); zeigeListe(); } }, '📊 Tagesrückblick ansehen'),
+        h('button', { type: 'button', class: 'allegesehen', 'aria-label': 'Hinweis schließen', onclick: () => { schreib('rbGesehen', tagKey()); zeigeListe(); } }, '✕')));
+    }
     if (!l.length) box.appendChild(h('div', { class: 'leer', text: reiter === 'lalie' ? 'Gerade keine Tour, die heute geladen und bis 5 Uhr morgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : reiter === 'mlalie' ? 'Gerade keine Tour, die morgen geladen und bis 5 Uhr übermorgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
     // „Beste zuerst“: eine durchgehende Liste, beste Tour ganz oben – neue sind nur mit NEU markiert
     if (sortierung === 'deckung') {
@@ -983,7 +1024,7 @@ function angeboteAus(ereignisse) {
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Frachtbeschreibung' }),
           feld('Lademeter', a.lm != null ? zahl(a.lm) + ' m' : ''), feld('Gewicht', a.t != null ? zahl(a.t) + ' t' : ''), feld('Warenart / Info', a.info)),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Frachtpreis' }),
-          feld('Preis', a.preis != null ? euro(a.preis) + (a.vorher ? ' (vorher ' + a.vorher + ')' : '') : 'abklären'),
+          feld('Preis', a.preis != null ? euro(a.preis) + (a.vorher ? (trendVon(a) === 1 ? ' ↑ erhöht' : trendVon(a) === -1 ? ' ↓ gesenkt' : '') + ' (vorher ' + a.vorher + ')' : '') : 'abklären'),
           feld('Vorschlag', a.preis == null && a.vorschlag ? euro(a.vorschlag) + (a.mindest ? ' · mindestens ' + euro(a.mindest) : '') : ''),
           feld('Zahlungsziel', a.zahlung ? a.zahlung + ' Tage' : ''), feld('€ pro km', a.euroKm != null ? zahl(a.euroKm, 2) + ' €/km' : '')),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Bewertung Fracht-Wächter' }),
@@ -1139,6 +1180,62 @@ function angeboteAus(ereignisse) {
     return (await r.text()).split('\n').filter(Boolean).map((z) => { try { return JSON.parse(z); } catch (e) { return null; } }).filter(Boolean);
   }
   let letzteSichtbareLadung = 0;
+
+  // ---------- Tagesrückblick: was heute gemeldet wurde (auch Touren, die schon wieder weg sind) ----------
+  const tagKey = () => { const d = new Date(); return 'tag_' + d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+  function tagLesen() { try { return JSON.parse(lies(tagKey(), '{}')) || {}; } catch (e) { return {}; } }
+  function tagMerken(ereignisse, heute0) {
+    const tag = tagLesen(), da = new Set(angebote.map((a) => a.id));
+    ereignisse.forEach((e) => {
+      if (e.event !== 'message' || (e.time || 0) * 1000 < heute0) return;
+      const a = parseMeldung(e);
+      if (!a || !a.start || !a.ziel) return;
+      tag[a.id] = { f: a.farbe, d: a.deckung, p: a.preis, s: a.start, z: a.ziel, t: a.zeit, l: istLaLie(a) ? 1 : istMorgenLaLie(a) ? 2 : 0, tr: trendVon(a), fi: a.firma || '' };
+    });
+    Object.keys(tag).forEach((id) => { tag[id].w = da.has(id) ? 0 : 1; });
+    schreib(tagKey(), JSON.stringify(tag));
+    // ältere Tage aufräumen
+    try { Object.keys(localStorage).filter((k) => /^fw_tag_/.test(k) && k !== 'fw_' + tagKey()).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
+  }
+  function rueckblick() {
+    const alle = Object.entries(tagLesen()).map(([id, x]) => Object.assign({ id: id }, x));
+    const eb = $('ebene'); eb.textContent = '';
+    const n = (f) => alle.filter(f).length;
+    const mitPreis = alle.filter((x) => x.d != null).sort((x, y) => y.d - x.d || (y.p || 0) - (x.p || 0));
+    const std = {}; alle.forEach((x) => { const hh = new Date(x.t).getHours(); std[hh] = (std[hh] || 0) + 1; });
+    const stunden = Object.keys(std).map(Number).sort((x, y) => x - y), maxStd = Math.max(1, ...Object.values(std));
+    const von = stunden.length ? Math.min(stunden[0], 8) : 8, bis = stunden.length ? Math.max(stunden[stunden.length - 1], 17) : 17;
+    const balken = []; for (let hh = von; hh <= bis; hh++) balken.push(h('div', { class: 'rb-std' }, h('i', { style: 'height:' + Math.round((std[hh] || 0) / maxStd * 100) + '%', title: (std[hh] || 0) + ' Touren' }), h('span', { text: String(hh) })));
+    const staerkste = stunden.length ? stunden.reduce((x, y) => (std[y] > std[x] ? y : x)) : null;
+    const kachel = (zahlText, text, cls) => h('div', { class: 'rb-kachel ' + (cls || '') }, h('b', { class: 'num', text: zahlText }), h('span', { text: text }));
+    const tourZeile = (x, i) => {
+      const a = angebote.find((y) => y.id === x.id);
+      const uhr = new Date(x.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+      return h('button', { type: 'button', class: 'rb-tour' + (a ? '' : ' weg'), disabled: a ? null : 'disabled', onclick: () => { if (a) oeffne(a); } },
+        h('b', { text: (i + 1) + '. ' + x.s + ' → ' + x.z }),
+        h('span', { text: (x.p != null ? euro(x.p) : '') + ' · ' + x.d + ' % · ' + uhr + ' Uhr' + (x.fi ? ' · ' + x.fi : '') + (a ? '' : ' · nicht mehr in Timocom') }));
+    };
+    eb.appendChild(h('div', { class: 'schleier', onclick: schliesse }));
+    eb.appendChild(h('div', { class: 'blatt rueckblick', role: 'dialog', 'aria-label': 'Tagesrückblick' },
+      h('h2', { text: '📊 Tagesrückblick · ' + new Date().toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' }) }),
+      !alle.length ? h('p', { text: 'Heute hat der Fracht-Wächter noch keine Tour gemeldet.' }) : null,
+      alle.length ? h('div', { class: 'rb-gitter' },
+        kachel(String(alle.length), alle.length === 1 ? 'Tour gemeldet' : 'Touren gemeldet', 'gross'),
+        kachel(String(n((x) => !x.w)), 'noch offen'),
+        kachel(String(n((x) => x.w)), 'schon wieder weg')) : null,
+      alle.length ? h('div', { class: 'rb-gitter vier' },
+        kachel('🥇 ' + n((x) => x.f === 'gold'), 'Gold', 'k-gold'), kachel('🟢 ' + n((x) => x.f === 'gruen'), 'sehr gut', 'k-gruen'),
+        kachel('🟡 ' + n((x) => x.f === 'gelb'), 'geht so'), kachel('🔵 ' + n((x) => x.f === 'anfrage'), 'ohne Preis', 'k-blau')) : null,
+      alle.length ? h('div', { class: 'rb-gitter' },
+        kachel('☀️ ' + n((x) => x.l === 1), 'Heute La-Lie'), kachel('🌅 ' + n((x) => x.l === 2), 'Morgen La-Lie'), kachel('↑ ' + n((x) => x.tr === 1), 'Preis erhöht')) : null,
+      mitPreis.length ? h('h3', { text: 'Die besten Touren heute' }) : null,
+      mitPreis.length ? h('div', { class: 'rb-liste' }, mitPreis.slice(0, 3).map(tourZeile)) : null,
+      alle.length ? h('h3', { text: 'Wann kamen die Touren?' + (staerkste != null ? ' Die meisten zwischen ' + staerkste + ' und ' + (staerkste + 1) + ' Uhr (' + std[staerkste] + ')' : '') }) : null,
+      alle.length ? h('div', { class: 'rb-balken', 'aria-hidden': 'true' }, balken) : null,
+      h('p', { text: 'Gezählt wird, was der Fracht-Wächter heute an diese App gemeldet hat.' }),
+      h('div', { class: 'reihe' }, h('button', { type: 'button', class: 'haupt', onclick: schliesse, text: 'Schließen' }))));
+  }
+  $('rueckblick').addEventListener('click', rueckblick);
   async function lade() {
     const kanal = lies('kanal', ''), token = lies('token', '');
     if (!kanal) { live = false; angebote = angeboteAus(beispiel()); stand = new Date(); return zeige('Beispieldaten'); }
@@ -1150,6 +1247,7 @@ function angeboteAus(ereignisse) {
       const vorher = new Set(angebote.map((a) => a.id)), warLive = live;
       live = true; stand = new Date();
       angebote = angeboteAus(teile.flat()).filter((a) => !(a.laden && a.laden.bis && a.laden.bis < heute0)); // Ladetag schon vorbei
+      try { tagMerken(teile.flat(), heute0.getTime()); } catch (e) { /* Rückblick ist nicht lebenswichtig */ }
       // Neu dazugekommen, während die App offen war: piepen und die Zeilen kurz blinken lassen
       const frischDa = warLive ? angebote.filter((a) => !vorher.has(a.id) && istNeu(a)) : [];
       blinkIds = new Set(frischDa.map((a) => a.id));
