@@ -450,7 +450,9 @@ function parseMeldung(msg) {
   if (kl) { a.ladenAb = Number(kl[1]) * 60000; a.ende = Number(kl[2]) * 60000; }
   // Koordinaten für die Karte (.wA…~L…~E…): A = LKW-Standort, L = Ladestelle, E = Entladestelle
   const kw = /\.w([ALE][-\d.,~ALE]+)/.exec(String(msg.click || ''));
-  if (kw) kw[1].split('~').forEach((x) => { const m = /^([ALE])(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(x); if (m) a.punkte.push({ typ: m[1], lat: Number(m[2]), lon: Number(m[3]) }); });
+  // ab Wächter 9.7 mit Postleitzahl: L51.4556,7.0116,45127
+  if (kw) kw[1].split('~').forEach((x) => { const m = /^([ALE])(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,(\d{4,5}))?$/.exec(x); if (m) a.punkte.push({ typ: m[1], lat: Number(m[2]), lon: Number(m[3]), plz: m[4] || '' }); });
+  { const l = a.punkte.find((x) => x.typ === 'L'), e = a.punkte.filter((x) => x.typ === 'E').pop(); a.plzStart = (l && l.plz) || ''; a.plzZiel = (e && e.plz) || ''; }
   const kopf = titel.slice(0, titel.indexOf(route[0]));
   for (const k in FARBEN) if (kopf.indexOf(k) !== -1) { a.farbe = FARBEN[k]; break; }
   for (const k in ARTEN) if (kopf.indexOf(k) !== -1) a.art = ARTEN[k];
@@ -522,7 +524,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.5 (24.11.)';
+  const APP_VERSION = '4.6 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1042,8 +1044,8 @@ function angeboteAus(ereignisse) {
           feld('Unternehmen', (a.firma || '–') + (a.sterne ? '  ★ ' + a.sterne : '')), feld('Ansprechpartner', a.name), feld('Telefon', a.tel), feld('Mobil', a.mobil), feld('E-Mail', a.mail)),
         firmenAbschnitt(a),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Be- und Entladestellen' }),
-          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↓' }), h('div', null, h('div', { class: 'ort', text: a.start }), h('div', { class: 'zeit', text: datumLang(a.laden) || a.ladenText }))),
-          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↑' }), h('div', null, h('div', { class: 'ort', text: a.ziel }), h('div', { class: 'zeit', text: (datumLang(a.entladen) || a.entladenText) + (a.stopps ? ' · ' + a.stopps + ' Stopps' : '') }))),
+          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↓' }), h('div', null, h('div', { class: 'ort', text: (a.plzStart ? a.plzStart + ' ' : '') + a.start }), h('div', { class: 'zeit', text: datumLang(a.laden) || a.ladenText }))),
+          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↑' }), h('div', null, h('div', { class: 'ort', text: (a.plzZiel ? a.plzZiel + ' ' : '') + a.ziel }), h('div', { class: 'zeit', text: (datumLang(a.entladen) || a.entladenText) + (a.stopps ? ' · ' + a.stopps + ' Stopps' : '') }))),
           kmText ? h('div', { class: 'notiz', text: kmText }) : null),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Frachtbeschreibung' }),
           feld('Lademeter', a.lm != null ? zahl(a.lm) + ' m' : ''), feld('Gewicht', a.t != null ? zahl(a.t) + ' t' : ''), feld('Warenart / Info', a.info)),
