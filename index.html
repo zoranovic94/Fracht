@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#34506b">
+<meta name="theme-color" content="#1f3a56" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#172a3d" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex">
-<link rel="manifest" href="manifest.webmanifest?v=3">
-<link rel="icon" href="icon-192.png?v=3">
-<link rel="apple-touch-icon" href="icon-192.png?v=3">
+<link rel="manifest" href="manifest.webmanifest?v=4">
+<link rel="icon" href="icon-192.png?v=4">
+<link rel="apple-touch-icon" href="icon-192.png?v=4">
 <style>html,body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 </head>
 <body>
@@ -330,6 +331,60 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 .rb-std i { width: 100%; min-height: 2px; background: var(--head2, #2f5c84); border-radius: 4px 4px 0 0; } .rb-std span { font-size: 10.5px; color: var(--muted); }
 .rb-hinweis { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rb-auf { border: 0; background: transparent; color: var(--link); font: 700 14px var(--font); padding: 4px 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
+/* 5.0: Kopfleiste – Logo, zweifarbiger Name, Live-Anzeige darunter, Linien-Symbole, Radar-Ringe im Hintergrund */
+.kopf { background-image: repeating-radial-gradient(circle at 100% -10px, rgba(255,204,51,.10) 0 1.5px, transparent 1.5px 30px), linear-gradient(135deg, var(--head) 0%, var(--head2) 100%); }
+.kopf-zeile { gap: 8px; }
+.marke { gap: 10px; min-width: 0; margin-right: auto; }
+.marke .logo { width: 38px; height: 38px; flex: none; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,204,51,.35), 0 3px 10px rgba(0,0,0,.35); }
+.marke .logo svg { width: 100%; height: 100%; display: block; }
+.marke-text { display: grid; gap: 1px; min-width: 0; }
+.marke-text b { font-size: 21px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; }
+.marke-text em { font-style: normal; color: #ffcc33; }
+.kopf .stand { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; opacity: .9; text-align: left; white-space: nowrap; }
+.kopf .stand i { width: 8px; height: 8px; border-radius: 50%; background: #9aa7b4; flex: none; }
+body.ist-live .kopf .stand i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,122,.25); }
+@media (prefers-reduced-motion: no-preference) { body.ist-live .kopf .stand i { animation: puls 2.4s ease-out infinite; } }
+.ikon { display: grid; place-items: center; padding: 0; }
+.ikon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ikon.aus { opacity: .6; }
+@media (prefers-reduced-motion: no-preference) { .ikon.dreht svg { animation: dreh .9s linear infinite; } @keyframes dreh { to { transform: rotate(360deg); } } }
+@media (max-width: 360px) { .kopf-zeile { gap: 6px; } .marke { gap: 8px; } .marke .logo { width: 32px; height: 32px; } .marke-text b { font-size: 18px; } .kopf-zeile .ikon { width: 36px; height: 36px; border-radius: 11px; } .ikon svg { width: 19px; height: 19px; } }
+/* 5.0: Startbild – Radar dreht eine Runde, Treffer leuchten auf, Name erscheint */
+#start { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; justify-items: center; gap: 26px; background: radial-gradient(120% 80% at 50% 40%, #24486b 0%, #15293d 55%, #0b1724 100%); color: #fff; font-family: var(--font); transition: opacity .38s ease, transform .38s ease; touch-action: none; user-select: none; -webkit-user-select: none; }
+#start.weg { opacity: 0; transform: scale(1.06); pointer-events: none; }
+.st-radar { position: relative; width: 204px; height: 204px; border-radius: 50%; background: radial-gradient(circle, rgba(255,204,51,.10) 0%, rgba(255,204,51,0) 70%); }
+.st-radar > span { position: absolute; inset: 0; border-radius: 50%; }
+.st-ring { border: 1.5px solid rgba(255,204,51,.32); }
+.st-radar > .st-ring.r2 { inset: 30px; } .st-radar > .st-ring.r3 { inset: 58px; border-color: rgba(255,204,51,.22); }
+.st-kreuz::before, .st-kreuz::after { content: ""; position: absolute; background: rgba(255,204,51,.14); }
+.st-kreuz::before { left: 50%; top: 0; bottom: 0; width: 1px; } .st-kreuz::after { top: 50%; left: 0; right: 0; height: 1px; }
+.st-sweep { background: conic-gradient(rgba(255,204,51,0) 0deg 250deg, rgba(255,204,51,.5) 360deg); }
+.st-sweep::after { content: ""; position: absolute; left: calc(50% - 1px); top: 0; width: 2px; height: 50%; border-radius: 2px; background: linear-gradient(to top, rgba(255,212,90,.15), #ffd45a); }
+.st-radar > .st-blip { inset: auto; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(var(--a)) translateY(calc(-1 * var(--r))); }
+.st-blip::after { content: ""; position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); opacity: .8; }
+.st-radar > .st-ping { inset: 64px; border: 2px solid #ffcc33; opacity: 0; }
+.st-radar > .st-mitte { inset: 64px; background: #0b1724; border: 3px solid #ffcc33; display: grid; place-items: center; box-shadow: 0 0 0 6px rgba(11,23,36,.55), 0 6px 18px rgba(0,0,0,.45); }
+.st-mitte svg { width: 42px; height: auto; display: block; }
+.st-name { font-size: 34px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+.st-name em { font-style: normal; color: #ffcc33; }
+.st-sub { margin-top: -14px; font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,.72); }
+@media (prefers-reduced-motion: no-preference) {
+  .st-ring { animation: stRing .5s cubic-bezier(.2,.8,.2,1) both; } .st-ring.r2 { animation-delay: .06s; } .st-ring.r3 { animation-delay: .12s; }
+  .st-sweep { animation: stEin .2s ease .2s both, stDreh 1s linear .2s infinite; }
+  .st-mitte { animation: stPop .45s cubic-bezier(.3,1.5,.5,1) .05s both; }
+  .st-ping { animation: stPing 1.1s ease-out .3s both; }
+  .st-blip::after { animation: stBlip 1.2s ease-out both; }
+  .st-blip.b1::after { animation-delay: .36s; } .st-blip.b2::after { animation-delay: .62s; } .st-blip.b3::after { animation-delay: .86s; }
+  .st-name { animation: stHoch .5s cubic-bezier(.2,.8,.2,1) .35s both; }
+  .st-sub { animation: stHoch .5s cubic-bezier(.2,.8,.2,1) .55s both; }
+  @keyframes stRing { from { opacity: 0; transform: scale(.7); } }
+  @keyframes stEin { from { opacity: 0; } }
+  @keyframes stDreh { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes stPop { from { opacity: 0; transform: scale(.4); } }
+  @keyframes stPing { 0% { opacity: .8; transform: scale(1); } 100% { opacity: 0; transform: scale(2.9); } }
+  @keyframes stBlip { 0% { opacity: 0; transform: scale(.3); } 12% { opacity: 1; transform: scale(1.8); } 30% { transform: scale(1); } 100% { opacity: .75; transform: scale(1); } }
+  @keyframes stHoch { from { opacity: 0; transform: translateY(12px); } }
+}
 /* 4.8: Warnung vor Timocom am Handy */
 .warn-ebene .schleier { z-index: 80; } .warn-ebene .blatt { z-index: 81; display: grid; gap: 12px; }
 .warnung p { color: var(--fg) !important; font-size: 14px !important; }
@@ -375,13 +430,42 @@ body.karten-an .spalten, body.karten-an #liste { display: none; }
 .d-inhalt .preisblock.f-gelb { box-shadow: var(--karte-schatten); }
 </style>
 
+<div id="start" aria-hidden="true">
+  <div class="st-radar">
+    <span class="st-kreuz"></span>
+    <span class="st-ring"></span><span class="st-ring r2"></span><span class="st-ring r3"></span>
+    <span class="st-sweep"></span>
+    <span class="st-blip b1" style="--a:58deg;--r:72px;--c:#ffd45a"></span>
+    <span class="st-blip b2" style="--a:150deg;--r:86px;--c:#34d17a"></span>
+    <span class="st-blip b3" style="--a:238deg;--r:56px;--c:#ffffff"></span>
+    <span class="st-ping"></span>
+    <span class="st-mitte"><svg viewBox="-12 -4 384 182"><rect width="236" height="122" rx="12" fill="#fff"/><path d="M246 34h58q14 0 22 12l28 40q6 9 6 20v16q0 10-10 10H246z" fill="#fff"/><rect x="-6" y="128" width="372" height="12" rx="6" fill="#fff"/><circle cx="44" cy="150" r="24" fill="#fff"/><circle cx="96" cy="150" r="24" fill="#fff"/><circle cx="300" cy="150" r="24" fill="#fff"/></svg></span>
+  </div>
+  <div class="st-name">Fracht<em>radar</em></div>
+  <div class="st-sub">Keine gute Tour mehr verpassen</div>
+</div>
+<script>
+/* Startbild nur beim echten Öffnen der App – nicht beim Neuladen nach einem Update; Antippen überspringt es */
+(function () {
+  var s = document.getElementById('start'); if (!s) return;
+  var schon = false;
+  try { schon = sessionStorage.getItem('fw_start') === '1'; sessionStorage.setItem('fw_start', '1'); } catch (e) {}
+  if (schon) { s.remove(); return; }
+  var ruhig = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var dauer = /^#tour-/.test(location.hash) ? 650 : ruhig ? 700 : 1550;
+  function weg() { if (s.classList.contains('weg')) return; s.classList.add('weg'); setTimeout(function () { s.remove(); }, 420); }
+  setTimeout(weg, dauer);
+  s.addEventListener('pointerdown', weg);
+})();
+</script>
+
 <header class="kopf">
   <div class="kopf-zeile">
-    <div class="marke"><i aria-hidden="true"></i>Frachtradar</div>
-    <div class="stand" id="stand">Beispieldaten</div>
-    <button class="ikon" id="ton" type="button" aria-label="Ton bei neuen Touren">🔔</button>
-    <button class="ikon" id="neu" type="button" aria-label="Aktualisieren">↻</button>
-    <button class="ikon" id="einst" type="button" aria-label="Einstellungen">⚙</button>
+    <div class="marke"><span class="logo"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lsw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffcc33" stop-opacity="0"/><stop offset="1" stop-color="#ffcc33" stop-opacity=".6"/></linearGradient></defs><circle cx="32" cy="32" r="31" fill="#0b1724"/><circle cx="32" cy="32" r="24" fill="none" stroke="#ffcc33" stroke-opacity=".3" stroke-width="1.5"/><path d="M32 32 L32 4 A28 28 0 0 1 56 18 Z" fill="url(#lsw)"/><circle cx="49" cy="14" r="3.2" fill="#ffd45a"/><circle cx="32" cy="32" r="17" fill="#0b1724" stroke="#ffcc33" stroke-width="2.4"/><g transform="translate(20.5 26) scale(.064)"><rect width="236" height="122" rx="12" fill="#fff"/><path d="M246 34h58q14 0 22 12l28 40q6 9 6 20v16q0 10-10 10H246z" fill="#fff"/><rect x="-6" y="128" width="372" height="12" rx="6" fill="#fff"/><circle cx="44" cy="150" r="24" fill="#fff"/><circle cx="96" cy="150" r="24" fill="#fff"/><circle cx="300" cy="150" r="24" fill="#fff"/></g></svg></span>
+      <span class="marke-text"><b>Fracht<em>radar</em></b><span class="stand" id="stand"><i aria-hidden="true"></i><span id="stand-text">Beispieldaten</span></span></span></div>
+    <button class="ikon" id="ton" type="button" aria-label="Ton bei neuen Touren"></button>
+    <button class="ikon" id="neu" type="button" aria-label="Aktualisieren"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg></button>
+    <button class="ikon" id="einst" type="button" aria-label="Einstellungen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></button>
   </div>
   <nav class="reiter" role="tablist" id="reiter"></nav>
 </header>
@@ -531,7 +615,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '4.9 (24.11.)';
+  const APP_VERSION = '5.0 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -715,7 +799,8 @@ function angeboteAus(ereignisse) {
   }
   function tonKnopf() {
     const k = $('ton');
-    k.textContent = tonAn ? '🔔' : '🔕';
+    // Glocke als Linien-Symbol, durchgestrichen wenn aus
+    k.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>' + (tonAn ? '' : '<path d="M4 4l16 16"/>') + '</svg>';
     k.classList.toggle('aus', !tonAn);
     k.setAttribute('aria-label', tonAn ? 'Ton bei neuen Touren ist an' : 'Ton bei neuen Touren ist aus');
   }
@@ -1353,7 +1438,7 @@ function angeboteAus(ereignisse) {
   async function lade() {
     const kanal = lies('kanal', ''), token = lies('token', '');
     if (!kanal) { live = false; angebote = angeboteAus(beispiel()); stand = new Date(); return zeige('Beispieldaten'); }
-    $('stand').textContent = 'lädt …';
+    $('stand-text').textContent = 'lädt …'; $('neu').classList.add('dreht');
     if (!live && !$('liste').children.length) { const l = $('liste'); for (let i = 0; i < 4; i++) l.appendChild(h('div', { class: 'zeile platzhalter', 'aria-hidden': 'true' })); }
     try {
       const teile = await Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token)));
@@ -1381,7 +1466,8 @@ function angeboteAus(ereignisse) {
     }
   }
   function zeige(standText) {
-    $('stand').textContent = standText;
+    $('stand-text').textContent = standText;
+    $('neu').classList.toggle('dreht', /lädt/.test(standText));
     document.body.classList.toggle('ist-live', !!live);
     $('beispiel').hidden = live;
     zeigeReiter(); zeigeListe();
@@ -1412,6 +1498,3 @@ function angeboteAus(ereignisse) {
   setInterval(() => { if (lies('kanal', '') && document.visibilityState === 'visible') lade(); }, 30000);
 })();
 </script>
-
-</body>
-</html>
