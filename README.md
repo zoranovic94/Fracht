@@ -8,3 +8,7 @@ Handy-Ansicht für die Meldungen des Fracht-Wächters (MZ Transport). Die Seite 
 - `toene/hinweis.mp3`: „Correct 2“ von freesound_community, Pixabay (Pixabay-Inhaltslizenz)
 - `toene/hinweis3.mp3`: derselbe Ton 3× hintereinander, lauter gemacht
 - übrige Dateien in `toene/`: für diese App erzeugt
+
+## Karte
+
+Karte © OpenStreetMap-Mitwirkende (Leaflet), Strecke: OSRM, Ortssuche für ältere Meldungen: Photon (komoot).

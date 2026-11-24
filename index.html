@@ -278,6 +278,29 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
   @keyframes schimmer { 50% { opacity: .55; } }
 }
 .platzhalter { height: 96px; background: var(--surface); }
+
+/* Karte in der Tour-Ansicht */
+.karte-rahmen { position: relative; }
+.karte-flaeche { height: 220px; background: color-mix(in srgb, var(--muted) 12%, var(--surface)); cursor: zoom-in; z-index: 0; }
+.karte-tipp { position: absolute; left: 8px; top: 8px; z-index: 500; background: rgba(15,23,42,.72); color: #fff; font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px; pointer-events: none; }
+.karte-zu { display: none; position: absolute; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 600; width: 44px; height: 44px; border-radius: 50%; border: 0;
+  background: var(--surface); color: var(--fg); font-size: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.3); cursor: pointer; }
+.karte-info { padding: 8px 12px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); }
+.karte-navs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 12px; }
+.karte-navs:empty { display: none; }
+.knopf.nav { flex-direction: row; gap: 8px; min-height: 46px; background: color-mix(in srgb, var(--link) 12%, var(--surface)); box-shadow: none; }
+.karte.gross { position: fixed; inset: 0; z-index: 70; border-radius: 0; margin: 0; display: flex; flex-direction: column; }
+.karte.gross h2 { display: none; }
+.karte.gross .karte-rahmen { flex: 1; }
+.karte.gross .karte-flaeche { height: 100%; cursor: grab; }
+.karte.gross .karte-zu { display: block; }
+.karte.gross .karte-tipp { display: none; }
+.karte.gross .karte-navs { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+.punkt span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font: 800 13px/1 var(--font); color: #fff; border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.p-L span { background: #1e8e4a; }
+.p-E span { background: #c8102e; }
+.p-A span { background: #fff; font-size: 16px; border-color: #64748b; }
+.leaflet-container { font-family: var(--font); }
 </style>
 
 <header class="kopf">
@@ -350,10 +373,13 @@ function parseMeldung(msg) {
     leerKm: null, lastKm: null, heimKm: null, anfahrtAb: '', lm: null, t: null, stopps: null,
     ueber: null, euroKm: null, vorher: '', zahlung: null, mindest: null, vorschlag: null,
     firma: '', sterne: '', name: '', tel: '', mobil: '', mail: '', info: '', hinweise: [],
-    telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel), ladenAb: null, ende: null
+    telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel), ladenAb: null, ende: null, punkte: []
   };
   const kl = /#tour-[A-Za-z0-9_-]+\.(\d+)\.(\d+)/.exec(String(msg.click || ''));
   if (kl) { a.ladenAb = Number(kl[1]) * 60000; a.ende = Number(kl[2]) * 60000; }
+  // Koordinaten für die Karte (.wA…~L…~E…): A = LKW-Standort, L = Ladestelle, E = Entladestelle
+  const kw = /\.w([ALE][-\d.,~ALE]+)/.exec(String(msg.click || ''));
+  if (kw) kw[1].split('~').forEach((x) => { const m = /^([ALE])(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(x); if (m) a.punkte.push({ typ: m[1], lat: Number(m[2]), lon: Number(m[3]) }); });
   const kopf = titel.slice(0, titel.indexOf(route[0]));
   for (const k in FARBEN) if (kopf.indexOf(k) !== -1) { a.farbe = FARBEN[k]; break; }
   for (const k in ARTEN) if (kopf.indexOf(k) !== -1) a.art = ARTEN[k];
@@ -425,7 +451,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '3.7 (24.11.)';
+  const APP_VERSION = '3.8 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -818,6 +844,7 @@ function angeboteAus(ereignisse) {
           h('span', { class: 'klein', text: [a.preis != null ? FARB_NAME[a.farbe] : 'ohne Preis', a.art].concat(a.symbole).filter(Boolean).join(' · ') }),
           h('span', { class: 'klein num', text: a.ueber != null ? (a.ueber >= 0 ? '+' : '−') + euro(Math.abs(a.ueber)) + ' über Kosten' : (a.mindest ? 'mind. ' + euro(a.mindest) : '') })),
         h('div', { class: 'knoepfe' }, knopf('📞', 'Anrufen', a.telUrl), knopf('✉', 'E-Mail-Anfrage', a.mailUrl), knopf('↗', 'In Timocom', a.timocomUrl)),
+        karteFuer(a),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Kontaktangaben' }),
           feld('Unternehmen', (a.firma || '–') + (a.sterne ? '  ★ ' + a.sterne : '')), feld('Ansprechpartner', a.name), feld('Telefon', a.tel), feld('Mobil', a.mobil), feld('E-Mail', a.mail)),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Be- und Entladestellen' }),
@@ -838,7 +865,117 @@ function angeboteAus(ereignisse) {
     eb.appendChild(seite);
     seite.querySelector('.d-kopf .ikon').focus();
   }
-  function schliesse() { offen = null; $('ebene').textContent = ''; }
+  function schliesse() { offen = null; karteWeg(); $('ebene').textContent = ''; }
+
+  // ---------- Karte in der Tour-Ansicht: LKW-Standort → Ladestelle → Entladestelle, Strecke als Pfad ----------
+  // Karte: OpenStreetMap (Leaflet), Strecke: OSRM (Straßenroute, Pkw-Profil), Orte älterer Meldungen: Photon
+  let leafletProm = null, karte = null;
+  const routenCache = {}, geoCache = {};
+  function leafletLaden() {
+    if (window.L) return Promise.resolve(window.L);
+    if (!leafletProm) leafletProm = new Promise((ok, fehl) => {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(css);
+      const js = document.createElement('script'); js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      js.onload = () => ok(window.L); js.onerror = () => { leafletProm = null; fehl(new Error('Leaflet')); };
+      document.head.appendChild(js);
+    });
+    return leafletProm;
+  }
+  async function ortSuchen(name) {
+    const key = String(name || '').trim();
+    if (!key) return null;
+    if (geoCache[key] !== undefined) return geoCache[key];
+    const gemerkt = lies('geo_' + key, '');
+    if (gemerkt) { try { return (geoCache[key] = JSON.parse(gemerkt)); } catch (e) { /* neu suchen */ } }
+    try {
+      const r = await fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(key) + '&limit=5&lang=de&osm_tag=place');
+      const j = await r.json();
+      const f = (j.features || []).find((x) => x.properties && x.properties.countrycode === 'DE') || (j.features || [])[0];
+      const erg = f ? { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] } : null;
+      geoCache[key] = erg; if (erg) schreib('geo_' + key, JSON.stringify(erg));
+      return erg;
+    } catch (e) { return null; }
+  }
+  async function punkteVon(a) {
+    if (a.punkte && a.punkte.some((p) => p.typ !== 'A')) return a.punkte;
+    // ältere Meldung ohne Koordinaten: Start- und Zielort nachschlagen
+    const [s, z] = await Promise.all([ortSuchen(a.start), ortSuchen(a.ziel)]);
+    return [s ? Object.assign({ typ: 'L' }, s) : null, z ? Object.assign({ typ: 'E' }, z) : null].filter(Boolean);
+  }
+  async function strasse(punkte) {
+    if (punkte.length < 2) return null;
+    const key = punkte.map((p) => p.lat.toFixed(4) + ',' + p.lon.toFixed(4)).join(';');
+    if (routenCache[key] !== undefined) return routenCache[key];
+    try {
+      const r = await fetch('https://router.project-osrm.org/route/v1/driving/' + punkte.map((p) => p.lon + ',' + p.lat).join(';') + '?overview=full&geometries=geojson');
+      const j = await r.json();
+      const rt = j && j.routes && j.routes[0];
+      return (routenCache[key] = rt ? { linie: rt.geometry.coordinates.map((c) => [c[1], c[0]]), km: rt.distance / 1000, std: rt.duration / 3600 } : null);
+    } catch (e) { return null; }
+  }
+  const navLink = (ziel, ueber) => 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + ziel.lat + ',' + ziel.lon +
+    (ueber && ueber.length ? '&waypoints=' + ueber.map((p) => p.lat + ',' + p.lon).join('%7C') : '');
+  function karteWeg() { if (karte && karte.map) { try { karte.map.remove(); } catch (e) { /* egal */ } } karte = null; }
+  function karteFuer(a) {
+    // Gleiche Tour schon offen (z. B. nach Aktualisierung): vorhandene Karte weiterverwenden, Zoom bleibt
+    if (karte && karte.id === a.id && karte.el) { setTimeout(() => { try { karte.map && karte.map.invalidateSize(); } catch (e) { /* egal */ } }, 50); return karte.el; }
+    karteWeg();
+    const flaeche = h('div', { class: 'karte-flaeche', role: 'img', 'aria-label': 'Karte der Tour ' + a.start + ' nach ' + a.ziel });
+    const zu = h('button', { type: 'button', class: 'karte-zu', 'aria-label': 'Große Karte schließen', text: '✕' });
+    const info = h('div', { class: 'karte-info', text: 'Karte wird geladen …' });
+    const navs = h('div', { class: 'karte-navs' });
+    const box = h('section', { class: 'abschnitt karte' }, h('h2', { text: 'Karte' }), h('div', { class: 'karte-rahmen' }, flaeche, zu, h('span', { class: 'karte-tipp', text: '⤢ antippen für groß' })), info, navs);
+    karte = { id: a.id, el: box, map: null };
+    const meins = karte;
+    (async () => {
+      let L, punkte;
+      try { [L, punkte] = await Promise.all([leafletLaden(), punkteVon(a)]); } catch (e) { info.textContent = 'Karte konnte nicht geladen werden (keine Verbindung?).'; return; }
+      if (karte !== meins) return;
+      const orte = punkte.filter((p) => p.typ !== 'A');
+      if (!orte.length) { info.textContent = 'Für diese Tour sind keine Orte bekannt.'; return; }
+      const map = L.map(flaeche, { zoomControl: false, attributionControl: true, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false });
+      meins.map = map;
+      map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
+      const zeichen = (p, i) => {
+        const nr = orte.length > 2 && p.typ !== 'A' ? orte.indexOf(p) + 1 : '';
+        const html = p.typ === 'A' ? '🚛' : p.typ === 'L' ? '↓' + nr : '↑' + nr;
+        return L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'punkt p-' + p.typ, html: '<span>' + html + '</span>', iconSize: [30, 30], iconAnchor: [15, 15] }), keyboard: false });
+      };
+      const grenzen = L.latLngBounds(punkte.map((p) => [p.lat, p.lon]));
+      map.fitBounds(grenzen, { padding: [28, 28] });
+      // Anfahrt (gestrichelt) und beladene Strecke (durchgezogen)
+      const start = punkte.find((p) => p.typ === 'A');
+      const [anfahrt, tour] = await Promise.all([start ? strasse([start, orte[0]]) : Promise.resolve(null), strasse(orte)]);
+      if (karte !== meins) return;
+      if (start) L.polyline(anfahrt ? anfahrt.linie : [[start.lat, start.lon], [orte[0].lat, orte[0].lon]], { color: '#64748b', weight: 4, dashArray: '6 9', opacity: .9 }).addTo(map);
+      const linie = tour ? tour.linie : orte.map((p) => [p.lat, p.lon]);
+      L.polyline(linie, { color: '#ffffff', weight: 9, opacity: .9 }).addTo(map);
+      const pfad = L.polyline(linie, { color: '#1f6feb', weight: 5, opacity: 1, dashArray: tour ? null : '2 10' }).addTo(map);
+      punkte.forEach((p, i) => zeichen(p, i).addTo(map));
+      map.fitBounds(pfad.getBounds().extend(grenzen), { padding: [28, 28] });
+      if (tour || anfahrt) map.attributionControl.addAttribution('Route: OSRM');
+      const t = [];
+      if (anfahrt) t.push('🚛 ' + zahl(anfahrt.km, 0) + ' km Anfahrt');
+      // Fahrzeit wie im Fracht-Wächter gerechnet: LKW-Schnitt 60 km/h, reine Fahrzeit ohne Pausen
+      const lkwStd = (km) => { const m = Math.round(km / 60 * 60); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') + ' Std.'; };
+      if (tour) t.push('🛣 ' + zahl(tour.km, 0) + ' km beladen · LKW ca. ' + lkwStd(tour.km) + ' Fahrzeit');
+      info.textContent = t.length ? t.join(' · ') : (punkte.length === orte.length && !a.punkte.length ? 'Orte ungefähr (nur Stadt bekannt)' : 'Strecke ungefähr (Luftlinie)');
+      navs.textContent = '';
+      navs.appendChild(h('a', { class: 'knopf nav', href: navLink(orte[0]), target: '_blank', rel: 'noopener' }, h('span', { 'aria-hidden': 'true', text: '🧭' }), 'Zur Ladestelle'));
+      navs.appendChild(h('a', { class: 'knopf nav', href: navLink(orte[orte.length - 1], orte.slice(0, -1)), target: '_blank', rel: 'noopener' }, h('span', { 'aria-hidden': 'true', text: '🗺' }), 'Ganze Tour'));
+      // Antippen: große Karte zum Verschieben und Zoomen
+      const gross = (an) => {
+        box.classList.toggle('gross', an);
+        ['dragging', 'touchZoom', 'scrollWheelZoom', 'doubleClickZoom'].forEach((x) => map[x][an ? 'enable' : 'disable']());
+        if (an) { if (!map.zoomControl) { map.zoomControl = L.control.zoom({ position: 'bottomright' }); } map.zoomControl.addTo(map); } else if (map.zoomControl) map.zoomControl.remove();
+        setTimeout(() => { map.invalidateSize(); map.fitBounds(pfad.getBounds().extend(grenzen), { padding: an ? [60, 40] : [28, 28] }); }, 60);
+      };
+      flaeche.addEventListener('click', () => { if (!box.classList.contains('gross')) gross(true); });
+      zu.addEventListener('click', (e) => { e.stopPropagation(); gross(false); });
+    })();
+    return box;
+  }
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { schliesse(); } });
 
   // ---------- Einstellungen ----------
@@ -917,7 +1054,7 @@ function angeboteAus(ereignisse) {
   function adresseLesen() {
     try {
       const k = decodeURIComponent((location.hash || '').slice(1));
-      const t = /^tour-([A-Za-z0-9_-]+)(?:\.\d+\.\d+)?$/.exec(k);
+      const t = /^tour-([A-Za-z0-9_-]+)(?:\..*)?$/.exec(k);
       if (t) zielTour = t[1];
       else {
         const kt = /^([A-Za-z0-9_-]{6,64})(?:\+(tk_[A-Za-z0-9]+))?$/.exec(k);
