@@ -306,7 +306,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '1.8 (24.11.)';
+  const APP_VERSION = '1.9 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -357,8 +357,8 @@ function angeboteAus(ereignisse) {
   // ---------- Zustand ----------
   let angebote = [], live = false, stand = null, reiter = lies('reiter3', 'alle'), sortierung = lies('sort', 'laden'), offen = null;
   // „NEU“ = kam an, seit du die App zuletzt verlassen hast
-  // „NEU“ = in der letzten Stunde reingekommen und noch nicht angetippt – egal ob die App dabei offen war oder nicht
-  const NEU_MINUTEN = 60;
+  // „NEU“ = in den letzten 30 Minuten reingekommen und noch nicht angetippt – egal ob die App dabei offen war oder nicht
+  const NEU_MINUTEN = 30;
   let gelesen = {};
   try { gelesen = JSON.parse(lies('gelesen', '{}')) || {}; } catch (e) { gelesen = {}; }
   const istNeu = (a) => !gelesen[a.id] && Date.now() - a.zeit < NEU_MINUTEN * 60000;
