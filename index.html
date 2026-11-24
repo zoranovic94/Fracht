@@ -110,7 +110,9 @@ button { font: inherit; color: inherit; }
 .leer { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 13px; }
 .gruppe { padding: 6px max(12px, env(safe-area-inset-right, 0px)) 6px 14px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
   color: var(--muted); background: var(--bg); border-bottom: 1px solid var(--line); }
-.gruppe.frisch { color: var(--accent); }
+.gruppe.frisch { color: var(--accent); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.allegesehen { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 4px 8px; font-size: 11.5px; font-weight: 600;
+  text-transform: none; letter-spacing: 0; cursor: pointer; }
 .neu { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .04em; vertical-align: 2px; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 60; background: var(--fg); color: var(--bg);
   padding: 10px 14px; border-radius: 8px; font-size: 13.5px; max-width: calc(100% - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
@@ -304,7 +306,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '1.6 (24.11.)';
+  const APP_VERSION = '1.7 (24.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -355,10 +357,19 @@ function angeboteAus(ereignisse) {
   // ---------- Zustand ----------
   let angebote = [], live = false, stand = null, reiter = lies('reiter3', 'alle'), sortierung = lies('sort', 'laden'), offen = null;
   // „NEU“ = kam an, seit du die App zuletzt verlassen hast
-  let gesehenBis = Number(lies('gesehenBis', '0')) || Date.now();
-  const merkeGesehen = () => schreib('gesehenBis', String(Date.now()));
-  if (!lies('gesehenBis', '')) merkeGesehen();
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') merkeGesehen(); else gesehenBis = Number(lies('gesehenBis', '0')) || gesehenBis; });
+  // „NEU“ = in der letzten Stunde reingekommen und noch nicht angetippt – egal ob die App dabei offen war oder nicht
+  const NEU_MINUTEN = 60;
+  let gelesen = {};
+  try { gelesen = JSON.parse(lies('gelesen', '{}')) || {}; } catch (e) { gelesen = {}; }
+  const istNeu = (a) => !gelesen[a.id] && Date.now() - a.zeit < NEU_MINUTEN * 60000;
+  function alsGelesen(a) {
+    gelesen[a.id] = Date.now();
+    const grenze = Date.now() - 2 * 864e5;
+    for (const k in gelesen) if (gelesen[k] < grenze) delete gelesen[k];
+    schreib('gelesen', JSON.stringify(gelesen));
+  }
+  // Kommt die App wieder in den Vordergrund, sofort neu laden
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && lies('kanal', '')) lade(); });
   let zielTour = null;
   function hinweis(text) {
     const t = h('div', { class: 'toast', role: 'status', text: text });
@@ -412,12 +423,12 @@ function angeboteAus(ereignisse) {
     // Eingang: neue mit „vor X Min.“, alle anderen mit Uhrzeit (bzw. Tag), wann der Wächter sie gemeldet hat
     const d0 = new Date(a.zeit), heuteTag = new Date().toDateString() === d0.toDateString();
     const uhr = String(d0.getHours()).padStart(2, '0') + ':' + String(d0.getMinutes()).padStart(2, '0');
-    const seit = a.zeit > gesehenBis ? (vor < 1 ? 'gerade eben' : vor < 60 ? 'vor ' + vor + ' Min.' : 'vor ' + Math.round(vor / 60) + ' Std.')
+    const seit = istNeu(a) ? (vor < 1 ? 'gerade eben' : vor < 60 ? 'vor ' + vor + ' Min.' : 'vor ' + Math.round(vor / 60) + ' Std.')
       : (heuteTag ? 'seit ' + uhr : 'seit ' + String(d0.getDate()).padStart(2, '0') + '.' + String(d0.getMonth() + 1).padStart(2, '0') + '. ' + uhr);
     const unten = [seit, a.firma, a.lm != null ? zahl(a.lm) + ' m' : '', a.t != null ? zahl(a.t) + ' t' : '', a.art || ''].filter(Boolean).join(' · ');
     return h('button', { class: 'zeile f-' + a.farbe, type: 'button', 'aria-label': a.start + ' nach ' + a.ziel, onclick: () => oeffne(a) },
       h('span', { class: 'streifen', 'aria-hidden': 'true' }),
-      h('span', { class: 'c-ort' }, h('b', null, a.start, a.zeit > gesehenBis ? h('span', { class: 'neu', text: 'NEU' }) : null), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
+      h('span', { class: 'c-ort' }, h('b', null, a.start, istNeu(a) ? h('span', { class: 'neu', text: 'NEU' }) : null), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
       h('span', { class: 'pfeil', 'aria-hidden': 'true', text: '→' }),
       h('span', { class: 'c-ort' }, h('b', { text: a.ziel }), wann(a.entladen, '', a.entladenText)),
       h('span', { class: 'c-km' }, h('b', { class: 'num', text: a.lastKm != null ? zahl(a.lastKm, 0) : '–' }), h('span', { text: a.leerKm != null ? '+' + zahl(a.leerKm, 0) : '' })),
@@ -431,10 +442,11 @@ function angeboteAus(ereignisse) {
     const box = $('liste'); box.textContent = '';
     if (!l.length) box.appendChild(h('div', { class: 'leer', text: reiter === 'lalie' ? 'Gerade keine Tour, die heute geladen und bis 5 Uhr morgen früh abgeladen werden kann. Neue erscheinen hier automatisch.' : live ? 'Gerade keine Angebote in diesem Reiter. Neue Meldungen vom Fracht-Wächter erscheinen hier automatisch.' : 'Keine Angebote.' }));
     // Was seit deinem letzten Blick reingekommen ist, steht immer oben – die neueste zuerst
-    const frisch = l.filter((a) => a.zeit > gesehenBis).sort((x, y) => y.zeit - x.zeit);
-    const rest = l.filter((a) => !(a.zeit > gesehenBis));
+    const frisch = l.filter(istNeu).sort((x, y) => y.zeit - x.zeit);
+    const rest = l.filter((a) => !istNeu(a));
     if (frisch.length) {
-      box.appendChild(h('div', { class: 'gruppe frisch', text: 'Neu reingekommen (' + frisch.length + ')' }));
+      box.appendChild(h('div', { class: 'gruppe frisch' }, 'Neu – noch nicht angesehen (' + frisch.length + ')',
+        h('button', { type: 'button', class: 'allegesehen', onclick: () => { frisch.forEach(alsGelesen); zeigeReiter(); zeigeListe(); } }, '✓ alle gesehen')));
       frisch.forEach((a) => box.appendChild(zeile(a)));
       if (rest.length) box.appendChild(h('div', { class: 'gruppe', text: 'Weitere Touren' }));
     }
@@ -445,6 +457,7 @@ function angeboteAus(ereignisse) {
   // ---------- Detailseite wie ein Timocom-Angebot ----------
   function oeffne(a) {
     offen = a;
+    if (istNeu(a)) { alsGelesen(a); setTimeout(() => { zeigeReiter(); zeigeListe(); }, 0); }
     const eb = $('ebene'); eb.textContent = '';
     const feld = (dt, dd) => (dd ? h('div', { class: 'feld' }, h('dt', { text: dt }), h('dd', null, dd)) : null);
     const knopf = (sym, text, url) => h('a', { class: 'knopf' + (url ? '' : ' aus'), href: url || null, target: url && /^https:/.test(url) ? '_blank' : null, rel: 'noopener' }, h('span', { 'aria-hidden': 'true', text: sym }), text);
@@ -489,7 +502,7 @@ function angeboteAus(ereignisse) {
     eb.appendChild(h('div', { class: 'schleier', onclick: schliesse }));
     eb.appendChild(h('form', { class: 'blatt', onsubmit: (e) => { e.preventDefault(); schreib('kanal', kanal.value.trim()); schreib('token', token.value.trim()); schliesse(); lade(); } },
       h('h2', { text: 'Verbindung zum Fracht-Wächter' }),
-      h('p', { text: 'Trag den Namen deines Hauptkanals ein (wie in der ntfy-App, ohne „-heute“ und „-preis“). Die Seite liest dann deine echten Meldungen und aktualisiert sich jede Minute. Ohne Kanal zeigt sie Beispieldaten.' }),
+      h('p', { text: 'Trag den Namen deines Hauptkanals ein (wie in der ntfy-App, ohne „-heute“ und „-preis“). Die Seite liest dann deine echten Meldungen und aktualisiert sich alle 30 Sekunden. Ohne Kanal zeigt sie Beispieldaten.' }),
       h('label', { for: 'f-kanal' }, 'Kanal', kanal), h('label', { for: 'f-token' }, 'Zugriffstoken (optional)', token),
       h('div', { class: 'reihe' }, h('button', { type: 'button', onclick: schliesse, text: 'Abbrechen' }), h('button', { type: 'submit', class: 'haupt', text: 'Speichern' })),
       h('p', { text: 'App-Version ' + APP_VERSION })));
@@ -544,7 +557,7 @@ function angeboteAus(ereignisse) {
   adresseLesen();
   window.addEventListener('hashchange', () => { adresseLesen(); if (zielTour) lade(); });
   lade();
-  setInterval(() => { if (lies('kanal', '') && document.visibilityState === 'visible') lade(); }, 60000);
+  setInterval(() => { if (lies('kanal', '') && document.visibilityState === 'visible') lade(); }, 30000);
 })();
 </script>
 
