@@ -461,6 +461,23 @@ body.karten-an .spalten, body.karten-an #liste { display: none; }
 .preisblock.f-gold .klein { color: #574006; }
 .chip.c-gold { background: linear-gradient(135deg, #f8dc7a, #d9a520); color: #2b1d00; }
 .u-gold span { background: linear-gradient(135deg, #f8dc7a, #d9a520); color: #2b1d00; border-color: #fff; }
+/* 5.5: 🔙 Rückweg – Tour angenommen, der Wächter sucht Rückladungen ab dem Entladeort */
+.rw-an { width: 100%; border: 0; border-radius: 14px; padding: 13px 14px; font: 700 15px var(--font); color: var(--fg); background: var(--surface); box-shadow: var(--karte-schatten); cursor: pointer; }
+.rw-an:active { transform: scale(.985); }
+.rueckweg-kasten { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, #1f6fd1 13%, var(--surface)); box-shadow: var(--karte-schatten); font-size: 13.5px; }
+.rueckweg-kasten > div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.rueckweg-kasten b { font-size: 15px; }
+.rueckweg-kasten .rw-status { color: var(--muted); }
+.rueckweg-kasten .rw-status.warn { color: var(--accent); }
+.rueckweg-kasten.fertig { background: color-mix(in srgb, #1e8e4a 13%, var(--surface)); font-weight: 600; }
+.rw-aus { flex: none; border: 0; border-radius: 999px; padding: 8px 12px; font: 700 13px var(--font); background: var(--surface); color: var(--fg); box-shadow: var(--karte-schatten); cursor: pointer; }
+.gruppe.rw-leiste { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--fg);
+  background: color-mix(in srgb, #1f6fd1 13%, var(--surface)); }
+.gruppe.rw-leiste span { min-width: 0; }
+.trend.rueckweg { background: #1f6fd1; color: #fff; }
+.trend.angenommen { background: #1e8e4a; color: #fff; }
+.zeile.f-gold small .trend.rueckweg { background: #1f4f8f; color: #fff; }
+.zeile.f-gold small .trend.angenommen { background: #14673a; color: #fff; }
 </style>
 
 <div id="start" aria-hidden="true">
@@ -603,7 +620,7 @@ function parseMeldung(msg) {
     id: msg.sequence_id || msg.id, zeit: basis, kanal: /-heute$/.test(msg.topic) ? 'heute' : /-preis$/.test(msg.topic) ? 'preis' : 'morgen',
     start: route[1].trim(), ziel: route[2].trim(), farbe: null, art: null, preis: null, deckung: null, symbole: [],
     laden: null, entladen: null, ladenText: '', entladenText: '', zurueck: '', tage: null,
-    leerKm: null, lastKm: null, heimKm: null, anfahrtAb: '', lm: null, t: null, stopps: null, ladeStellen: 1, entladeStellen: 1,
+    leerKm: null, lastKm: null, heimKm: null, anfahrtAb: '', lm: null, t: null, stopps: null, ladeStellen: 1, entladeStellen: 1, rueckweg: false, rueckZuId: '', rueckwegText: '',
     ueber: null, euroKm: null, vorher: '', zahlung: null, mindest: null, vorschlag: null,
     firma: '', sterne: '', name: '', tel: '', mobil: '', mail: '', info: '', hinweise: [],
     telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel), ladenAb: null, ende: null, punkte: [], details: []
@@ -625,6 +642,8 @@ function parseMeldung(msg) {
   if (kopf.indexOf('🔄') !== -1) a.symbole.push('🔄 Preis geändert');
   if (kopf.indexOf('🤝') !== -1) a.symbole.push('🤝 Stammkunde');
   if (kopf.indexOf('✅') !== -1) a.symbole.push('✅ passt zum Auflieger');
+  if (kopf.indexOf('🔙') !== -1) { a.rueckweg = true; a.symbole.push('🔙 Rückweg'); }
+  { const rz = /^[^#]*#tour-[A-Za-z0-9_-]+(?:\.\d+\.\d+)?\.r([A-Za-z0-9_-]+)/.exec(String(msg.click || '').split('!i=')[0]); if (rz) a.rueckZuId = rz[1]; }
   const p = /(\d[\d.]*) € \((\d+) %\)/.exec(kopf);
   if (p) { a.preis = zahlAus(p[1]); a.deckung = Number(p[2]); }
   if (!a.farbe) a.farbe = a.preis == null ? 'anfrage' : 'gelb';
@@ -665,6 +684,7 @@ function parseMeldung(msg) {
       });
     } else if ((m = /^✉ (.*)$/.exec(z))) a.mail = m[1].split(' · ')[0].trim();
     else if ((m = /^ℹ (.*)$/.exec(z))) a.info = m[1];
+    else if (/^🔙 /.test(z)) { a.rueckwegText = z; a.hinweise.push(z); }
     else if (/^(🏠|↩|➡️|⚠️|✅)/.test(z)) a.hinweise.push(z);
   }
   (msg.actions || []).forEach((x) => {
@@ -693,7 +713,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '5.4 (25.11.)';
+  const APP_VERSION = '5.5 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1112,7 +1132,7 @@ function angeboteAus(ereignisse) {
       h('span', { class: 'c-km' }, h('b', { class: 'num', text: a.lastKm != null ? zahl(a.lastKm, 0) : '–' }), h('span', { text: a.leerKm != null ? '+' + zahl(a.leerKm, 0) : '' })),
       h('span', { class: 'c-preis' }, h('b', { class: 'num', text: a.preis != null ? euro(a.preis) : 'abklären' }),
         h('span', { class: 'prozent num', text: a.deckung != null ? (FARB_SYMBOL[a.farbe] ? FARB_SYMBOL[a.farbe] + ' ' : '') + a.deckung + ' %' : (a.vorschlag ? '~' + euro(a.vorschlag) : '') })),
-      unten || trendVon(a) || rueckVon(a) ? h('small', null, trendSchild(a), rueckSchild(a), unten) : null);
+      unten || trendVon(a) || rueckVon(a) || rwSchild(a) ? h('small', null, rwSchild(a), trendSchild(a), rueckSchild(a), unten) : null);
   }
   // Rückladung am Ziel (prüft der Wächter): gut / mittel / schlecht – oder Ziel liegt ohnehin nah an der Heimat
   function rueckVon(a) {
@@ -1162,6 +1182,12 @@ function angeboteAus(ereignisse) {
     const l = sortiere(farbFilter ? alleImReiter.filter((a) => a.farbe === farbFilter) : alleImReiter);
     if (kartenAnsicht) { $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote'); zeigeUebersicht(l); return; }
     const box = $('liste'); box.textContent = '';
+    if (live) aktiveAuftraege().forEach((x) => {
+      const n = gefundenFuer(x.id), st = rwStatus(x);
+      box.appendChild(h('div', { class: 'gruppe rw-leiste' },
+        h('span', { text: '🔙 Rückweg ab ' + x.ort + ' · ' + (n ? n + ' gefunden' : 'noch nichts gefunden') + ' · ' + (x.ok ? '✓ PC sucht' : st.warn ? '⚠️ PC antwortet nicht' : '… wird geschickt') }),
+        h('button', { type: 'button', class: 'allegesehen', onclick: () => rueckwegBeenden(x.id) }, 'Beenden')));
+    });
     if (live && new Date().getHours() >= 18 && lies('rbGesehen', '') !== tagKey() && Object.keys(tagLesen()).length) {
       box.appendChild(h('div', { class: 'gruppe rb-hinweis' },
         h('button', { type: 'button', class: 'rb-auf', onclick: () => { schreib('rbGesehen', tagKey()); rueckblick(); zeigeListe(); } }, '📊 Tagesrückblick ansehen'),
@@ -1192,6 +1218,109 @@ function angeboteAus(ereignisse) {
     $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote');
   }
 
+  // ---------- 🔙 Rückweg: Tour angenommen → der Fracht-Wächter am PC sucht Rückladungen ab dem Entladeort ----------
+  // Die App schreibt „an“/„aus“ in den ntfy-Kanal …-auftrag, der Wächter bestätigt mit „ok“ und meldet Treffer mit 🔙.
+  const HEIM_KM = 100, HEIM_NAME = 'Duisburg'; // HEIM (Koordinaten) steht weiter unten beim Firmen-/Rückladungsteil
+  function kmLuft(p, q) {
+    const r = Math.PI / 180, dLat = (q.lat - p.lat) * r, dLon = (q.lon - p.lon) * r;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(p.lat * r) * Math.cos(q.lat * r) * Math.sin(dLon / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+  let auftraege = (() => { try { return JSON.parse(lies('auftraege', '{}')) || {}; } catch (e) { return {}; } })();
+  const auftragAktiv = (x) => !!x && !x.aus && Date.now() < (Number(x.ende) || 0) + 36 * 36e5;
+  const aktiveAuftraege = () => Object.keys(auftraege).map((k) => auftraege[k]).filter(auftragAktiv);
+  function auftraegeMerken() {
+    Object.keys(auftraege).forEach((k) => { if (Date.now() > (Number(auftraege[k].ende) || 0) + 3 * 864e5) delete auftraege[k]; });
+    schreib('auftraege', JSON.stringify(auftraege));
+  }
+  function auftraegeAus(ev) {
+    ev.filter((m) => m && m.event === 'message').sort((x, y) => (x.time || 0) - (y.time || 0)).forEach((m) => {
+      let d = null; try { d = JSON.parse(m.message); } catch (e) { return; }
+      if (!d || typeof d.id !== 'string') return;
+      // Zeiten kommen vom ntfy-Server; die Handy-Uhr kann ein paar Sekunden abweichen – darum 10 Min. Spielraum
+      const t = (m.time || 0) * 1000, alt = auftraege[d.id], ab = alt ? (alt.seitServer || (alt.seit || 0) - 6e5) : 0;
+      if (d.typ === 'an') {
+        if (alt && !alt.seitServer && Math.abs((alt.seit || 0) - t) < 6e5) { alt.seitServer = t; return; } // die eigene Meldung von hier
+        if (alt && t <= ab) return;
+        auftraege[d.id] = { id: d.id, tour: String(d.tour || ''), ort: String(d.ort || ''), lat: Number(d.lat), lon: Number(d.lon), ende: Number(d.ende) || t, seit: t, seitServer: t, ok: 0, aus: 0, grundAus: '' };
+      } else if (alt && d.typ === 'aus' && t >= ab && !alt.aus) { alt.aus = t; alt.grundAus = 'beendet'; }
+      else if (alt && d.typ === 'ok' && t >= ab) { alt.ok = alt.ok || t; if (d.aus && !alt.aus) { alt.aus = t; alt.grundAus = String(d.aus); } }
+    });
+  }
+  async function auftragSenden(d) {
+    const kanal = lies('kanal', ''), token = lies('token', '');
+    if (!kanal) throw new Error('kein Kanal');
+    const r = await fetch('https://ntfy.sh/' + encodeURIComponent(kanal + '-auftrag'), { method: 'POST', body: JSON.stringify(d), headers: token ? { Authorization: 'Bearer ' + token } : {} });
+    if (!r.ok) throw new Error('ntfy ' + r.status);
+  }
+  const wannKurz = (ms) => {
+    const d = new Date(ms), h0 = new Date(); h0.setHours(0, 0, 0, 0);
+    const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    const tage = Math.round((new Date(d).setHours(0, 0, 0, 0) - h0.getTime()) / 864e5);
+    return (tage === 0 ? 'heute ' : tage === 1 ? 'morgen ' : d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ' ') + hm;
+  };
+  const gefundenFuer = (id) => angebote.filter((b) => b.rueckZuId === id).length;
+  function rwStatus(x) {
+    if (x.ok) return { text: '✓ PC sucht seit ' + new Date(x.ok).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr', warn: false };
+    if (Date.now() - (x.seit || 0) < 4 * 60000) return { text: '… wird an den PC geschickt', warn: false };
+    return { text: '⚠️ Der PC hat noch nicht geantwortet – läuft der Fracht-Wächter (ab v10.1) und ist Timocom offen?', warn: true };
+  }
+  let rwSendet = false;
+  async function annehmen(a) {
+    if (rwSendet) return;
+    rwSendet = true;
+    try {
+      let ziel = null;
+      const e = (a.punkte || []).filter((p) => p.typ === 'E').pop();
+      if (e) ziel = { lat: e.lat, lon: e.lon, plz: e.plz || '' };
+      else { const g = await ortSuchen(a.ziel, 'ziel'); if (g) ziel = { lat: g.lat, lon: g.lon, plz: a.plzZiel || '' }; }
+      if (!ziel) { hinweis('Den Entladeort ' + a.ziel + ' finde ich nicht auf der Karte – Rückweg-Suche geht so leider nicht.'); return; }
+      const ende = a.ende || (a.entladen && a.entladen.bis ? a.entladen.bis.getTime() : a.entladen && a.entladen.von ? a.entladen.von.getTime() + 2 * 36e5 : Date.now());
+      const eltern = a.rueckZuId && auftragAktiv(auftraege[a.rueckZuId]) ? auftraege[a.rueckZuId] : null;
+      if (eltern) { await auftragSenden({ typ: 'aus', id: eltern.id }); eltern.aus = Date.now(); eltern.grundAus = 'Rückladung angenommen'; }
+      const heimKm = kmLuft(ziel, HEIM);
+      if (heimKm <= HEIM_KM) {
+        auftraege[a.id] = { id: a.id, tour: a.start + ' → ' + a.ziel, ort: a.ziel, lat: ziel.lat, lon: ziel.lon, ende: ende, seit: Date.now(), ok: 0, aus: Date.now(), grundAus: 'nah', heimKm: heimKm };
+        hinweis((eltern ? 'Rückweg-Suche ab ' + eltern.ort + ' beendet. ' : '') + (heimKm < 25 ? 'Damit geht es zurück nach Hause' : a.ziel + ' liegt nah an ' + HEIM_NAME) + ' – die nächste Tour findet deine normale Suche.');
+      } else {
+        await auftragSenden({ typ: 'an', id: a.id, tour: a.start + ' → ' + a.ziel, ort: a.ziel, plz: ziel.plz, lat: Number(ziel.lat.toFixed(4)), lon: Number(ziel.lon.toFixed(4)), ende: ende });
+        auftraege[a.id] = { id: a.id, tour: a.start + ' → ' + a.ziel, ort: a.ziel, lat: ziel.lat, lon: ziel.lon, ende: ende, seit: Date.now(), ok: 0, aus: 0, grundAus: '' };
+        hinweis('Der Fracht-Wächter am PC sucht jetzt Rückladungen ab ' + a.ziel + ' Richtung ' + HEIM_NAME + ' (frei ab ' + wannKurz(ende) + '). Treffer kommen mit 🔙.');
+      }
+      auftraegeMerken();
+      zeigeListe(); if (offen && offen.id === a.id) oeffne(a);
+    } catch (err) {
+      hinweis('Konnte den PC nicht erreichen (keine Verbindung?). Bitte nochmal versuchen.');
+    } finally { rwSendet = false; }
+  }
+  async function rueckwegBeenden(id) {
+    const x = auftraege[id];
+    if (!x || !confirm('Rückweg-Suche ab ' + x.ort + ' beenden?')) return;
+    try { await auftragSenden({ typ: 'aus', id: id }); } catch (e) { hinweis('Konnte den PC nicht erreichen – bitte nochmal versuchen.'); return; }
+    x.aus = Date.now(); x.grundAus = 'beendet'; auftraegeMerken();
+    zeigeListe(); if (offen) { const a = angebote.find((b) => b.id === offen.id); if (a) oeffne(a); }
+  }
+  function rueckwegKasten(a) {
+    if (!live) return null;
+    const x = auftraege[a.id];
+    if (x && auftragAktiv(x)) {
+      const st = rwStatus(x), n = gefundenFuer(x.id);
+      return h('div', { class: 'rueckweg-kasten' },
+        h('div', null, h('b', { text: '🔙 Rückweg-Suche läuft' }),
+          h('span', { text: 'ab ' + x.ort + ' Richtung ' + HEIM_NAME + ' · frei ab ' + wannKurz(x.ende) + (n ? ' · ' + n + (n === 1 ? ' Rückladung' : ' Rückladungen') + ' gefunden' : '') }),
+          h('span', { class: 'rw-status' + (st.warn ? ' warn' : ''), text: st.text })),
+        h('button', { type: 'button', class: 'rw-aus', onclick: () => rueckwegBeenden(x.id), text: 'Beenden' }));
+    }
+    if (x && x.grundAus === 'nah') return h('div', { class: 'rueckweg-kasten fertig', text: '✅ Angenommen – ' + (x.heimKm < 25 ? 'zurück nach Hause' : x.ort + ' liegt nah an ' + HEIM_NAME) + ', keine Rückweg-Suche nötig' });
+    if (x && x.aus) return h('div', { class: 'rueckweg-kasten fertig', text: '✅ Angenommen – Rückweg-Suche ' + (x.grundAus === 'Rückladung angenommen' ? 'beendet, Rückladung angenommen' : 'beendet') });
+    return h('button', { type: 'button', class: 'rw-an', onclick: () => annehmen(a) }, '✅ Angenommen – Rückweg suchen');
+  }
+  function rwSchild(a) {
+    if (a.rueckweg) return h('span', { class: 'trend rueckweg', text: '🔙 Rückweg' });
+    const x = auftraege[a.id];
+    return x && (auftragAktiv(x) || x.aus) ? h('span', { class: 'trend angenommen', text: '✅ angenommen' }) : null;
+  }
+
   // ---------- Detailseite wie ein Timocom-Angebot ----------
   function oeffne(a) {
     offen = a;
@@ -1213,6 +1342,7 @@ function angeboteAus(ereignisse) {
           h('span', { class: 'klein', text: [a.preis != null ? FARB_NAME[a.farbe] : 'ohne Preis', a.art].concat(a.symbole).filter(Boolean).join(' · ') }),
           h('span', { class: 'klein num', text: a.ueber != null ? (a.ueber >= 0 ? '+' : '−') + euro(Math.abs(a.ueber)) + ' über Kosten' : (a.mindest ? 'mind. ' + euro(a.mindest) : '') })),
         h('div', { class: 'knoepfe' }, knopf('📞', 'Anrufen', a.telUrl), knopf('✉', 'E-Mail-Anfrage', a.mailUrl), timocomKnopf(a.timocomUrl)),
+        rueckwegKasten(a),
         karteFuer(a),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Kontaktangaben' }),
           feld('Unternehmen', (a.firma || '–') + (a.sterne ? '  ★ ' + a.sterne : '')), feld('Ansprechpartner', a.name), feld('Telefon', a.tel), feld('Mobil', a.mobil), feld('E-Mail', a.mail)),
@@ -1525,7 +1655,8 @@ function angeboteAus(ereignisse) {
     $('stand-text').textContent = 'lädt …'; $('neu').classList.add('dreht');
     if (!live && !$('liste').children.length) { const l = $('liste'); for (let i = 0; i < 4; i++) l.appendChild(h('div', { class: 'zeile platzhalter', 'aria-hidden': 'true' })); }
     try {
-      const teile = await Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token)));
+      const [teile, auftragEv] = await Promise.all([Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token))), holeKanal(kanal + '-auftrag', token).catch(() => null)]);
+      if (auftragEv) { try { auftraegeAus(auftragEv); auftraegeMerken(); } catch (e) { /* egal */ } }
       const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
       const vorher = new Set(angebote.map((a) => a.id)), warLive = live;
       live = true; stand = new Date();
