@@ -358,7 +358,6 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 .kopf .stand.z-warn i { background: #ffb020; box-shadow: 0 0 0 3px rgba(255,176,32,.3); }
 .kopf .stand.z-aus i { background: #ff4d5e; box-shadow: 0 0 0 3px rgba(255,77,94,.32); }
 .kopf .stand.z-aus { color: #ffd0d5; }
-.kopf .stand.z-pause i { background: #9aa7b4; }
 @media (prefers-reduced-motion: no-preference) { .kopf .stand.z-ok i { animation: puls 2.4s ease-out infinite; } .kopf .stand.z-aus i { animation: pulsRot 1.4s ease-out infinite; }
   @keyframes pulsRot { 0% { box-shadow: 0 0 0 0 rgba(255,77,94,.6); } 70% { box-shadow: 0 0 0 8px rgba(255,77,94,0); } 100% { box-shadow: 0 0 0 0 rgba(255,77,94,0); } } }
 .pc-warnung { margin: 0 10px 8px; padding: 10px 12px; border-radius: 12px; background: #c8102e; color: #fff; font-size: 13.5px; font-weight: 600; line-height: 1.35; box-shadow: var(--karte-schatten); }
@@ -722,7 +721,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '5.6 (25.11.)';
+  const APP_VERSION = '5.7 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1192,7 +1191,7 @@ function angeboteAus(ereignisse) {
     const l = sortiere(farbFilter ? alleImReiter.filter((a) => a.farbe === farbFilter) : alleImReiter);
     if (kartenAnsicht) { $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote'); zeigeUebersicht(l); return; }
     const box = $('liste'); box.textContent = '';
-    if (live) { const z = pcZustand(); if (z.art === 'aus' || z.art === 'warn') box.appendChild(h('div', { class: 'pc-warnung' + (z.art === 'warn' ? ' warn' : ''), role: 'status', text: '⚠️ ' + z.lang })); }
+    if (live) { const z = pcZustand(); if (z.dienst && (z.art === 'aus' || z.art === 'warn')) box.appendChild(h('div', { class: 'pc-warnung' + (z.art === 'warn' ? ' warn' : ''), role: 'status', text: '⚠️ ' + z.lang })); }
     if (live) aktiveAuftraege().forEach((x) => {
       const n = gefundenFuer(x.id), st = rwStatus(x);
       box.appendChild(h('div', { class: 'gruppe rw-leiste' },
@@ -1238,19 +1237,20 @@ function angeboteAus(ereignisse) {
   }
   const uhrHM = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   function pcZustand() {
+    // Immer der echte Zustand – auch abends (keine „Pause“-Anzeige). Der große Hinweis über der Liste kommt nur in der Arbeitszeit.
     const jetzt = Date.now(), std = new Date().getHours();
     const ab = pcStand && isFinite(pcStand.ab) ? Number(pcStand.ab) : 8, bis = pcStand && isFinite(pcStand.bis) ? Number(pcStand.bis) : 18;
     const dienst = ab === bis || (ab < bis ? std >= ab && std < bis : std >= ab || std < bis);
     const alter = pcStand ? jetzt - pcStand.serverT : Infinity;
-    if (!dienst) return alter < 75 * 60000
-      ? { art: 'pause', kurz: 'Pause bis ' + ab + ' Uhr', lang: 'Außerhalb der Arbeitszeit (' + ab + '–' + bis + ' Uhr) meldet der Fracht-Wächter keine Touren. Der PC ist an.' }
-      : { art: 'pause', kurz: 'Feierabend', lang: 'Außerhalb der Arbeitszeit (' + ab + '–' + bis + ' Uhr). Vom PC kommt gerade kein Lebenszeichen – ab ' + ab + ' Uhr muss er wieder laufen.' };
-    if (!pcStand) return { art: 'aus', kurz: 'Kein Signal vom PC', lang: 'Vom Fracht-Wächter am PC kommt kein Lebenszeichen. Läuft er (ab Version 10.2) und ist Timocom am PC offen? Bis dahin kommen keine neuen Touren.' };
-    if (alter > 14 * 60000) return { art: 'aus', kurz: 'PC offline seit ' + uhrHM(pcStand.serverT), lang: 'Seit ' + uhrHM(pcStand.serverT) + ' Uhr kein Lebenszeichen vom PC – aus, im Ruhezustand, kein Internet oder Chrome mit Timocom zu? Bis dahin kommen keine neuen Touren.' };
-    if (pcStand.abgemeldet) return { art: 'aus', kurz: 'Timocom abgemeldet', lang: 'Timocom ist am PC abgemeldet – es kommen keine neuen Touren. Bitte am PC wieder anmelden.' };
-    if (pcStand.suche === false) return { art: 'warn', kurz: 'Timocom-Suche nicht offen', lang: 'Am PC ist in Timocom gerade keine Frachtsuche offen. Bitte die Suche öffnen und „Automatisch aktualisieren“ einschalten.' };
-    if (!pcStand.liste || pcStand.t - pcStand.liste > 5 * 60000) return { art: 'warn', kurz: 'Timocom-Liste steht' + (pcStand.liste ? ' seit ' + uhrHM(pcStand.liste) : ''), lang: 'Die Suchliste in Timocom aktualisiert sich am PC nicht mehr' + (pcStand.liste ? ' (zuletzt ' + uhrHM(pcStand.liste) + ' Uhr)' : '') + '. Bitte nachsehen: noch angemeldet? „Automatisch aktualisieren“ an? Tab noch offen?' };
-    return { art: 'ok', kurz: null, lang: 'Alles läuft: Der Fracht-Wächter am PC hat sich um ' + uhrHM(pcStand.serverT) + ' Uhr gemeldet, die Timocom-Liste kam um ' + uhrHM(pcStand.liste) + ' Uhr' + (pcStand.angebote ? ' (' + pcStand.angebote + ' Angebote)' : '') + '.' };
+    const grenze = (pcStand && pcStand.v === '10.2' && pcStand.dienst === false ? 75 : 14) * 60000; // Wächter 10.2 meldete sich abends nur stündlich
+    const z = (art, kurz, lang) => ({ art: art, kurz: kurz, lang: lang, dienst: dienst });
+    if (!pcStand) return z('aus', 'Kein Signal vom PC', 'Vom Fracht-Wächter am PC kommt kein Lebenszeichen. Läuft er (ab Version 10.2) und ist Timocom am PC offen? Bis dahin kommen keine neuen Touren.');
+    if (alter > grenze) return z('aus', 'PC offline seit ' + uhrHM(pcStand.serverT), 'Seit ' + uhrHM(pcStand.serverT) + ' Uhr kein Lebenszeichen vom PC – aus, im Ruhezustand, kein Internet oder Chrome mit Timocom zu? Bis dahin kommen keine neuen Touren.');
+    if (pcStand.abgemeldet) return z('aus', 'Timocom abgemeldet', 'Timocom ist am PC abgemeldet – es kommen keine neuen Touren. Bitte am PC wieder anmelden.');
+    if (pcStand.suche === false) return z('warn', 'Timocom-Suche nicht offen', 'Am PC ist in Timocom gerade keine Frachtsuche offen. Bitte die Suche öffnen und „Automatisch aktualisieren“ einschalten.');
+    if (!pcStand.liste || pcStand.t - pcStand.liste > 5 * 60000) return z('warn', 'Timocom-Liste steht' + (pcStand.liste ? ' seit ' + uhrHM(pcStand.liste) : ''), 'Die Suchliste in Timocom aktualisiert sich am PC nicht mehr' + (pcStand.liste ? ' (zuletzt ' + uhrHM(pcStand.liste) + ' Uhr)' : '') + '. Bitte nachsehen: noch angemeldet? „Automatisch aktualisieren“ an? Tab noch offen?');
+    return z('ok', null, 'Alles läuft: Der Fracht-Wächter am PC hat sich um ' + uhrHM(pcStand.serverT) + ' Uhr gemeldet, die Timocom-Liste kam um ' + uhrHM(pcStand.liste) + ' Uhr' + (pcStand.angebote ? ' (' + pcStand.angebote + ' Angebote)' : '') + '.' +
+      (dienst ? '' : ' Touren meldet der Wächter nur in deiner Arbeitszeit (' + ab + '–' + bis + ' Uhr).'));
   }
   function standErklaeren() {
     if (!lies('kanal', '')) return hinweis('Beispieldaten – trag in den Einstellungen deinen Kanal ein.', 5000);
