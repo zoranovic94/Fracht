@@ -721,7 +721,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '5.8 (25.11.)';
+  const APP_VERSION = '5.9 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1191,7 +1191,8 @@ function angeboteAus(ereignisse) {
     const l = sortiere(farbFilter ? alleImReiter.filter((a) => a.farbe === farbFilter) : alleImReiter);
     if (kartenAnsicht) { $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote'); zeigeUebersicht(l); return; }
     const box = $('liste'); box.textContent = '';
-    if (live) { const z = pcZustand(); if (z.dienst && (z.art === 'aus' || z.art === 'warn')) box.appendChild(h('div', { class: 'pc-warnung' + (z.art === 'warn' ? ' warn' : ''), role: 'status', text: '⚠️ ' + z.lang })); }
+    if (verbindungWeg) box.appendChild(h('div', { class: 'pc-warnung', role: 'status', text: '⚠️ Keine Verbindung zu ntfy – hat das Handy Internet? ' + (live && stand ? 'Die Liste zeigt den Stand von ' + uhrHM(stand) + ' Uhr. ' : '') + 'Neuer Versuch läuft …' }));
+    else if (live) { const z = pcZustand(); if (z.dienst && (z.art === 'aus' || z.art === 'warn')) box.appendChild(h('div', { class: 'pc-warnung' + (z.art === 'warn' ? ' warn' : ''), role: 'status', text: '⚠️ ' + z.lang })); }
     if (live) aktiveAuftraege().forEach((x) => {
       const n = gefundenFuer(x.id), st = rwStatus(x);
       box.appendChild(h('div', { class: 'gruppe rw-leiste' },
@@ -1257,7 +1258,7 @@ function angeboteAus(ereignisse) {
   }
   function standErklaeren() {
     if (!lies('kanal', '')) return hinweis('Beispieldaten – trag in den Einstellungen deinen Kanal ein.', 5000);
-    if (!live) return hinweis('Keine Verbindung zu ntfy – hat das Handy Internet?', 5000);
+    if (verbindungWeg || !live) return hinweis('Keine Verbindung zu ntfy – hat das Handy Internet?' + (live && stand ? ' Die Liste zeigt den Stand von ' + uhrHM(stand) + ' Uhr.' : ''), 6000);
     hinweis(pcZustand().lang, 7000);
   }
   $('stand').addEventListener('click', standErklaeren);
@@ -1694,14 +1695,35 @@ function angeboteAus(ereignisse) {
       h('div', { class: 'reihe' }, h('button', { type: 'button', class: 'haupt', onclick: schliesse, text: 'Schließen' }))));
   }
   $('rueckblick').addEventListener('click', rueckblick);
+  // Alle Kanäle in EINER Abfrage (Touren, ⚡ heute, 🔵 Preis, Aufträge, PC-Lebenszeichen). Danach nur noch, was seit dem letzten
+  // Mal dazukam (klein und schnell, auch bei schlechtem Netz) – alle 30 Min. einmal komplett neu.
+  let alleEv = [], evKanal = '', letztesVoll = 0, ladeLaeuft = false, wiederholung = null, verbindungWeg = false;
+  async function holeAlle(kanal, token) {
+    const topics = ['', '-heute', '-preis', '-auftrag', '-pc'].map((x) => encodeURIComponent(kanal + x)).join(',');
+    const voll = evKanal !== kanal || !alleEv.length || Date.now() - letztesVoll > 30 * 60000;
+    const seit = voll ? '24h' : String(Math.max(0, alleEv.reduce((m, e) => Math.max(m, e.time || 0), 0) - 15));
+    const r = await fetch('https://ntfy.sh/' + topics + '/json?poll=1&since=' + seit,
+      { headers: token ? { Authorization: 'Bearer ' + token } : {}, signal: AbortSignal.timeout ? AbortSignal.timeout(voll ? 25000 : 12000) : undefined });
+    if (!r.ok) throw new Error('ntfy ' + r.status);
+    const neu = (await r.text()).split('\n').filter(Boolean).map((z) => { try { return JSON.parse(z); } catch (e) { return null; } }).filter((e) => e && e.id);
+    if (voll) { alleEv = neu; letztesVoll = Date.now(); evKanal = kanal; }
+    else { const da = new Set(alleEv.map((e) => e.id)); neu.forEach((e) => { if (!da.has(e.id)) alleEv.push(e); }); }
+    const grenze = Date.now() / 1000 - 24 * 3600;
+    alleEv = alleEv.filter((e) => (e.time || 0) >= grenze);
+    const nach = (x) => alleEv.filter((e) => e.topic === kanal + x);
+    return { touren: alleEv.filter((e) => e.topic === kanal || e.topic === kanal + '-heute' || e.topic === kanal + '-preis'), auftrag: nach('-auftrag'), pc: nach('-pc') };
+  }
   async function lade() {
     const kanal = lies('kanal', ''), token = lies('token', '');
-    if (!kanal) { live = false; angebote = angeboteAus(beispiel()); stand = new Date(); return zeige('Beispieldaten'); }
+    if (!kanal) { live = false; verbindungWeg = false; angebote = angeboteAus(beispiel()); stand = new Date(); return zeige('Beispieldaten'); }
+    if (ladeLaeuft) return;
+    ladeLaeuft = true; clearTimeout(wiederholung);
     $('stand-text').textContent = 'lädt …'; $('neu').classList.add('dreht');
     if (!live && !$('liste').children.length) { const l = $('liste'); for (let i = 0; i < 4; i++) l.appendChild(h('div', { class: 'zeile platzhalter', 'aria-hidden': 'true' })); }
     try {
-      const [teile, auftragEv, pcEv] = await Promise.all([Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token))),
-        holeKanal(kanal + '-auftrag', token).catch(() => null), holeKanal(kanal + '-pc', token).catch(() => null)]);
+      const alle = await holeAlle(kanal, token);
+      const teile = [alle.touren], auftragEv = alle.auftrag, pcEv = alle.pc;
+      verbindungWeg = false;
       if (pcEv) pcAus(pcEv);
       pcAktivT = teile.flat().reduce((m, e) => Math.max(m, e && (e.event === 'message' || e.event === 'message_delete') ? (e.time || 0) * 1000 : 0), 0);
       if (auftragEv) { try { auftraegeAus(auftragEv); auftraegeMerken(); } catch (e) { /* egal */ } }
@@ -1724,18 +1746,21 @@ function angeboteAus(ereignisse) {
       zeige('Live · ' + stand.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr');
       zeigeAlarm();
     } catch (e) {
-      live = false; angebote = angeboteAus(beispiel());
-      zeige('Keine Verbindung – Beispieldaten');
-    }
+      // Keine Verbindung: NIE Beispieldaten zeigen – die letzten echten Touren bleiben stehen, oben steht rot „Keine Verbindung“
+      verbindungWeg = true;
+      if (!live) angebote = [];
+      zeige('Keine Verbindung');
+      wiederholung = setTimeout(() => { if (document.visibilityState === 'visible') lade(); }, 10000);
+    } finally { ladeLaeuft = false; }
   }
   function zeige(standText) {
     // „Live“ nur, wenn auch am PC alles läuft – sonst steht da, was los ist (PC offline, Timocom abgemeldet, Liste steht)
-    const z = live ? pcZustand() : null;
+    const z = verbindungWeg ? { art: 'aus', kurz: 'Keine Verbindung' + (live && stand ? ' · Stand ' + uhrHM(stand) : '') } : live ? pcZustand() : null;
     $('stand-text').textContent = z && z.kurz ? z.kurz : standText;
     $('stand').className = 'stand' + (z ? ' z-' + z.art : '');
     $('neu').classList.toggle('dreht', /lädt/.test(standText));
     document.body.classList.toggle('ist-live', !!live);
-    $('beispiel').hidden = live;
+    $('beispiel').hidden = live || !!lies('kanal', '');
     zeigeReiter(); zeigeListe();
     if (zielTour) {
       // Aus einer Benachrichtigung geöffnet: diese Tour direkt zeigen
