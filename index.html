@@ -84,11 +84,21 @@ button { font: inherit; color: inherit; }
 
 /* Tabelle wie in Timocom */
 .tabelle { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.spalten, .zeile { display: grid; grid-template-columns: 6px minmax(0, 1fr) 14px minmax(0, 1fr) 40px 74px; column-gap: 6px; align-items: start;
+.spalten, .zeile { display: grid; grid-template-columns: 6px minmax(0, 1fr) 14px minmax(0, 1fr) 24px 38px 72px; column-gap: 5px; align-items: start;
   padding-right: max(12px, env(safe-area-inset-right, 0px)); }
 .spalten { background: var(--head); color: var(--head-fg); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding-block: 7px; opacity: .92; }
 .spalten span:last-child, .zeile .c-preis { text-align: right; }
 .spalten .c-km, .zeile .c-km { text-align: right; }
+/* 5.3: Lade-/Entladestellen (L/E) als eigene Spalte – 1/1 blass, mehr Stellen kräftig */
+.spalten .c-le, .zeile .c-le { text-align: center; align-items: center; }
+.zeile .c-le b { font-size: 13.5px; font-weight: 700; white-space: nowrap; }
+.zeile .c-le b.eins { opacity: .45; font-weight: 600; }
+.spalten .c-le { display: flex; justify-content: center; } .le-symbol { width: 21px; height: 17px; display: block; margin-top: -2px; }
+/* lange Ortsnamen lieber trennen (Mönchen-gladbach) als abschneiden */
+.zeile .c-ort b { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
+/* schmale Handys: Spalten enger, Uhrzeiten etwas kleiner, damit „08:00–10:00“ ganz sichtbar bleibt */
+@media (max-width: 380px) { .spalten, .zeile { grid-template-columns: 5px minmax(0, 1fr) 11px minmax(0, 1fr) 22px 33px 68px; column-gap: 4px; }
+  .zeile .c-ort .uhr { font-size: 12.5px; letter-spacing: -.02em; } .zeile .c-le b { font-size: 12.5px; } .zeile .c-preis b { font-size: 15px; } }
 .zeile { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); text-align: left; padding-block: 9px; cursor: pointer; }
 .zeile:last-child { border-bottom: 0; }
 .zeile > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -99,7 +109,7 @@ button { font: inherit; color: inherit; }
 .zeile .c-ort .uhr { font-style: normal; white-space: nowrap; display: inline-block; }
 .zeile .pfeil { color: var(--muted); font-size: 14px; line-height: 1.25; text-align: center; }
 .zeile span span, .zeile small { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.zeile small { grid-column: 2 / 7; margin-top: 3px; }
+.zeile small { grid-column: 2 / -1; margin-top: 3px; }
 .streifen { align-self: stretch; margin-block: -9px; }
 .f-gold { background: var(--gold-bg); } .f-gold .streifen { background: var(--gold); width: 7px; }
 .f-gold .c-preis b { font-size: 1.08em; }
@@ -549,7 +559,7 @@ window.startTonSpielen = function (ctx, puffer, wann) {
 <div class="beispiel" id="beispiel">Beispieldaten mit erfundenen Firmen. Tippe oben auf ⚙ und trag deinen Kanal ein, dann erscheinen hier deine echten Touren vom Fracht-Wächter.</div>
 
 <main class="tabelle" id="tabelle">
-  <div class="spalten" aria-hidden="true"><span></span><span>Start</span><span></span><span>Ziel</span><span class="c-km">km</span><span>Preis</span></div>
+  <div class="spalten" aria-hidden="true"><span></span><span>Start</span><span></span><span>Ziel</span><span class="c-le" title="Lade-/Entladestellen"><svg class="le-symbol" viewBox="0 0 24 20" aria-hidden="true"><defs><linearGradient id="leBlau" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b88b4"/><stop offset="1" stop-color="#2d648e"/></linearGradient></defs><rect width="24" height="20" rx="3.5" fill="url(#leBlau)"/><path d="M8.6 17.2V12.6H5.9L10 7.9l4.1 4.7h-2.7v4.6z" fill="#fff"/><path d="M13.1 2.8h2.8v5.7h2.6l-4 4.6-4-4.6h2.6z" fill="#8dc63f"/></svg></span><span class="c-km">km</span><span>Preis</span></div>
   <div id="liste"></div>
   <div id="uebersicht" hidden><div id="ueb-karte"></div><div class="karte-info" id="ueb-info"></div></div>
 </main>
@@ -581,6 +591,8 @@ function fensterAus(text, basis) {
   if (/ohne Uhrzeit/.test(t) || (m[3] === '00:00' && !m[4])) return { von, bis, uhr: 'ohne Zeit', unklar: true };
   return { von, bis, uhr: m[3] ? m[3] + (m[4] ? '–' + m[4] : ' Uhr') : '' };
 }
+// Touren mit mehr Lade- oder Entladestellen kommen nicht in die App (der Wächter meldet sie ab v10.0 gar nicht mehr)
+const MAX_STELLEN = 2;
 function parseMeldung(msg) {
   if (!msg || msg.event !== 'message') return null;
   const titel = String(msg.title || '');
@@ -591,7 +603,7 @@ function parseMeldung(msg) {
     id: msg.sequence_id || msg.id, zeit: basis, kanal: /-heute$/.test(msg.topic) ? 'heute' : /-preis$/.test(msg.topic) ? 'preis' : 'morgen',
     start: route[1].trim(), ziel: route[2].trim(), farbe: null, art: null, preis: null, deckung: null, symbole: [],
     laden: null, entladen: null, ladenText: '', entladenText: '', zurueck: '', tage: null,
-    leerKm: null, lastKm: null, heimKm: null, anfahrtAb: '', lm: null, t: null, stopps: null,
+    leerKm: null, lastKm: null, heimKm: null, anfahrtAb: '', lm: null, t: null, stopps: null, ladeStellen: 1, entladeStellen: 1,
     ueber: null, euroKm: null, vorher: '', zahlung: null, mindest: null, vorschlag: null,
     firma: '', sterne: '', name: '', tel: '', mobil: '', mail: '', info: '', hinweise: [],
     telUrl: '', mailUrl: '', timocomUrl: '', knapp: /⚠️\s*$/.test(titel), ladenAb: null, ende: null, punkte: [], details: []
@@ -619,10 +631,13 @@ function parseMeldung(msg) {
   for (const zeile of String(msg.message || '').split('\n')) {
     const z = zeile.trim();
     let m;
-    if ((m = /^🕐 Laden: (.*)$/.exec(z))) { a.ladenText = m[1]; a.laden = fensterAus(m[1], basis); }
-    else if ((m = /^🕐 Entladen: (.*)$/.exec(z))) {
+    if ((m = /^🕐 Laden: (.*)$/.exec(z))) {
+      const n = /\s*\((\d+) Ladestellen\)/.exec(m[1]); if (n) a.ladeStellen = Number(n[1]);
+      a.ladenText = m[1].replace(/\s*\(\d+ Ladestellen\)/, ''); a.laden = fensterAus(a.ladenText, basis);
+    } else if ((m = /^🕐 Entladen: (.*)$/.exec(z))) {
       const teile = m[1].split(' · ');
-      a.entladenText = teile[0]; a.entladen = fensterAus(teile[0], basis);
+      const n = /\s*\((\d+) Entladestellen\)/.exec(teile[0]); if (n) a.entladeStellen = Number(n[1]);
+      a.entladenText = teile[0].replace(/\s*\(\d+ Entladestellen\)/, ''); a.entladen = fensterAus(a.entladenText, basis);
       teile.slice(1).forEach((x) => { const r = /zurück ca\. (.*)/.exec(x); if (r) a.zurueck = r[1]; const t = /([\d,]+) Fahrertage/.exec(x); if (t) a.tage = zahlAus(t[1]); });
     } else if ((m = /^🛣 ([\d.]+) \+ ([\d.]+)(?: \+ ([\d.]+))? km(.*)$/.exec(z))) {
       a.leerKm = zahlAus(m[1]); a.lastKm = zahlAus(m[2]); a.heimKm = m[3] ? zahlAus(m[3]) : null;
@@ -658,6 +673,7 @@ function parseMeldung(msg) {
     else if (/^mailto:/.test(u)) a.mailUrl = u;
     else if (/^https:\/\/my\.timocom\.com\//.test(u)) a.timocomUrl = u;
   });
+  if (a.ladeStellen > MAX_STELLEN || a.entladeStellen > MAX_STELLEN) return null;
   return a;
 }
 // Alle Ereignisse eines oder mehrerer Kanäle -> aktuelle Angebote (gelöschte fallen raus, Updates ersetzen)
@@ -677,7 +693,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '5.2 (24.11.)';
+  const APP_VERSION = '5.3 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1092,6 +1108,7 @@ function angeboteAus(ereignisse) {
       h('span', { class: 'c-ort' }, h('b', null, a.start, istNeu(a) ? h('span', { class: 'neu', text: 'NEU' }) : null), wann(a.laden, heuteL ? 'heute' : '', a.ladenText)),
       h('span', { class: 'pfeil', 'aria-hidden': 'true', text: '→' }),
       h('span', { class: 'c-ort' }, h('b', { text: a.ziel }), wann(a.entladen, '', a.entladenText)),
+      h('span', { class: 'c-le', title: a.ladeStellen + ' Ladestelle(n), ' + a.entladeStellen + ' Entladestelle(n)' }, h('b', { class: 'num' + (a.ladeStellen === 1 && a.entladeStellen === 1 ? ' eins' : ''), text: a.ladeStellen + '/' + a.entladeStellen })),
       h('span', { class: 'c-km' }, h('b', { class: 'num', text: a.lastKm != null ? zahl(a.lastKm, 0) : '–' }), h('span', { text: a.leerKm != null ? '+' + zahl(a.leerKm, 0) : '' })),
       h('span', { class: 'c-preis' }, h('b', { class: 'num', text: a.preis != null ? euro(a.preis) : 'abklären' }),
         h('span', { class: 'prozent num', text: a.deckung != null ? (FARB_SYMBOL[a.farbe] ? FARB_SYMBOL[a.farbe] + ' ' : '') + a.deckung + ' %' : (a.vorschlag ? '~' + euro(a.vorschlag) : '') })),
@@ -1199,10 +1216,9 @@ function angeboteAus(ereignisse) {
         karteFuer(a),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Kontaktangaben' }),
           feld('Unternehmen', (a.firma || '–') + (a.sterne ? '  ★ ' + a.sterne : '')), feld('Ansprechpartner', a.name), feld('Telefon', a.tel), feld('Mobil', a.mobil), feld('E-Mail', a.mail)),
-        firmenAbschnitt(a),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Be- und Entladestellen' }),
-          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↓' }), h('div', null, h('div', { class: 'ort', text: (a.plzStart ? a.plzStart + ' ' : '') + a.start }), h('div', { class: 'zeit', text: datumLang(a.laden) || a.ladenText }))),
-          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↑' }), h('div', null, h('div', { class: 'ort', text: (a.plzZiel ? a.plzZiel + ' ' : '') + a.ziel }), h('div', { class: 'zeit', text: (datumLang(a.entladen) || a.entladenText) + (a.stopps ? ' · ' + a.stopps + ' Stopps' : '') }))),
+          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↓' }), h('div', null, h('div', { class: 'ort', text: (a.plzStart ? a.plzStart + ' ' : '') + a.start }), h('div', { class: 'zeit', text: (datumLang(a.laden) || a.ladenText) + (a.ladeStellen > 1 ? ' · ' + a.ladeStellen + ' Ladestellen' : '') }))),
+          h('div', { class: 'stelle' }, h('i', { 'aria-hidden': 'true', text: '↑' }), h('div', null, h('div', { class: 'ort', text: (a.plzZiel ? a.plzZiel + ' ' : '') + a.ziel }), h('div', { class: 'zeit', text: (datumLang(a.entladen) || a.entladenText) + (a.entladeStellen > 1 ? ' · ' + a.entladeStellen + ' Entladestellen' : '') }))),
           kmText ? h('div', { class: 'notiz', text: kmText }) : null),
         h('section', { class: 'abschnitt' }, h('h2', { text: 'Frachtbeschreibung' }),
           feld('Lademeter', a.lm != null ? zahl(a.lm) + ' m' : ''), feld('Gewicht', a.t != null ? zahl(a.t) + ' t' : ''),
@@ -1215,7 +1231,8 @@ function angeboteAus(ereignisse) {
           feld('Deckung', a.deckung != null ? a.deckung + ' % · ' + FARB_NAME[a.farbe] : FARB_NAME[a.farbe]),
           feld('Fahrertage', a.tage ? zahl(a.tage) : ''), feld('Zurück am Standort', a.zurueck),
           a.hinweise.map((t) => h('div', { class: 'notiz', text: t })),
-          h('div', { class: 'notiz', text: 'Gemeldet ' + new Date(a.zeit).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr' }))));
+          h('div', { class: 'notiz', text: 'Gemeldet ' + new Date(a.zeit).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr' })),
+        firmenAbschnitt(a)));
     eb.appendChild(seite);
     seite.querySelector('.d-kopf .ikon').focus();
   }
