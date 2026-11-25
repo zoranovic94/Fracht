@@ -352,8 +352,17 @@ body.ist-live .marke i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,
 .marke-text em { font-style: normal; color: #ffcc33; }
 .kopf .stand { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; opacity: .9; text-align: left; white-space: nowrap; }
 .kopf .stand i { width: 8px; height: 8px; border-radius: 50%; background: #9aa7b4; flex: none; }
-body.ist-live .kopf .stand i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,122,.25); }
-@media (prefers-reduced-motion: no-preference) { body.ist-live .kopf .stand i { animation: puls 2.4s ease-out infinite; } }
+/* 5.6: Punkt zeigt, ob am PC wirklich alles läuft (Lebenszeichen vom Fracht-Wächter): grün ok · orange Liste steht · rot PC aus/abgemeldet · grau Pause */
+.kopf .stand { cursor: pointer; min-width: 0; } .kopf .stand #stand-text { overflow: hidden; text-overflow: ellipsis; }
+.kopf .stand.z-ok i { background: #34d17a; box-shadow: 0 0 0 3px rgba(52,209,122,.25); }
+.kopf .stand.z-warn i { background: #ffb020; box-shadow: 0 0 0 3px rgba(255,176,32,.3); }
+.kopf .stand.z-aus i { background: #ff4d5e; box-shadow: 0 0 0 3px rgba(255,77,94,.32); }
+.kopf .stand.z-aus { color: #ffd0d5; }
+.kopf .stand.z-pause i { background: #9aa7b4; }
+@media (prefers-reduced-motion: no-preference) { .kopf .stand.z-ok i { animation: puls 2.4s ease-out infinite; } .kopf .stand.z-aus i { animation: pulsRot 1.4s ease-out infinite; }
+  @keyframes pulsRot { 0% { box-shadow: 0 0 0 0 rgba(255,77,94,.6); } 70% { box-shadow: 0 0 0 8px rgba(255,77,94,0); } 100% { box-shadow: 0 0 0 0 rgba(255,77,94,0); } } }
+.pc-warnung { margin: 0 10px 8px; padding: 10px 12px; border-radius: 12px; background: #c8102e; color: #fff; font-size: 13.5px; font-weight: 600; line-height: 1.35; box-shadow: var(--karte-schatten); }
+.pc-warnung.warn { background: #a85d00; }
 .ikon { display: grid; place-items: center; padding: 0; }
 .ikon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ikon.aus { opacity: .6; }
@@ -551,7 +560,7 @@ window.startTonSpielen = function (ctx, puffer, wann) {
 <header class="kopf">
   <div class="kopf-zeile">
     <div class="marke"><span class="logo"><svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lsw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffcc33" stop-opacity="0"/><stop offset="1" stop-color="#ffcc33" stop-opacity=".6"/></linearGradient></defs><circle cx="32" cy="32" r="31" fill="#0b1724"/><circle cx="32" cy="32" r="24" fill="none" stroke="#ffcc33" stroke-opacity=".3" stroke-width="1.5"/><path d="M32 32 L32 4 A28 28 0 0 1 56 18 Z" fill="url(#lsw)"/><circle cx="49" cy="14" r="3.2" fill="#ffd45a"/><circle cx="32" cy="32" r="17" fill="#0b1724" stroke="#ffcc33" stroke-width="2.4"/><g transform="translate(20.5 26) scale(.064)"><rect width="236" height="122" rx="12" fill="#fff"/><path d="M246 34h58q14 0 22 12l28 40q6 9 6 20v16q0 10-10 10H246z" fill="#fff"/><rect x="-6" y="128" width="372" height="12" rx="6" fill="#fff"/><circle cx="44" cy="150" r="24" fill="#fff"/><circle cx="96" cy="150" r="24" fill="#fff"/><circle cx="300" cy="150" r="24" fill="#fff"/></g></svg></span>
-      <span class="marke-text"><b>Fracht<em>radar</em></b><span class="stand" id="stand"><i aria-hidden="true"></i><span id="stand-text">Beispieldaten</span></span></span></div>
+      <span class="marke-text"><b>Fracht<em>radar</em></b><span class="stand" id="stand" role="button" tabindex="0" aria-label="Verbindung zum PC"><i aria-hidden="true"></i><span id="stand-text">Beispieldaten</span></span></span></div>
     <button class="ikon" id="ton" type="button" aria-label="Ton bei neuen Touren"></button>
     <button class="ikon" id="neu" type="button" aria-label="Aktualisieren"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg></button>
     <button class="ikon" id="einst" type="button" aria-label="Einstellungen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></button>
@@ -713,7 +722,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '5.5 (25.11.)';
+  const APP_VERSION = '5.6 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -959,9 +968,10 @@ function angeboteAus(ereignisse) {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(tonVersuch, 300); });
   setTimeout(tonSperreZeigen, 2000);
 
-  function hinweis(text) {
-    const t = h('div', { class: 'toast', role: 'status', text: text });
-    document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+  function hinweis(text, ms) {
+    document.querySelectorAll('.toast').forEach((x) => x.remove());
+    const t = h('div', { class: 'toast', role: 'status', text: text, onclick: () => t.remove() });
+    document.body.appendChild(t); setTimeout(() => t.remove(), ms || 3500);
   }
   // Symbol vor der Prozentzahl – damit 🥇 Gold und 🟡 geht so auf einen Blick zu unterscheiden sind
   const FARB_SYMBOL = { gold: '🥇', gruen: '🟢', gelb: '🟡', rot: '🔴' };
@@ -1182,6 +1192,7 @@ function angeboteAus(ereignisse) {
     const l = sortiere(farbFilter ? alleImReiter.filter((a) => a.farbe === farbFilter) : alleImReiter);
     if (kartenAnsicht) { $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote'); zeigeUebersicht(l); return; }
     const box = $('liste'); box.textContent = '';
+    if (live) { const z = pcZustand(); if (z.art === 'aus' || z.art === 'warn') box.appendChild(h('div', { class: 'pc-warnung' + (z.art === 'warn' ? ' warn' : ''), role: 'status', text: '⚠️ ' + z.lang })); }
     if (live) aktiveAuftraege().forEach((x) => {
       const n = gefundenFuer(x.id), st = rwStatus(x);
       box.appendChild(h('div', { class: 'gruppe rw-leiste' },
@@ -1217,6 +1228,37 @@ function angeboteAus(ereignisse) {
     rest.forEach((a) => box.appendChild(zeile(a)));
     $('anzahl').textContent = l.length + (l.length === 1 ? ' Angebot' : ' Angebote');
   }
+
+  // ---------- 💚 Läuft am PC wirklich alles? Lebenszeichen vom Fracht-Wächter (Kanal …-pc, ab Wächter 10.2) ----------
+  let pcStand = null;
+  function pcAus(ev) {
+    (ev || []).filter((m) => m && m.event === 'message').sort((x, y) => (x.time || 0) - (y.time || 0)).forEach((m) => {
+      try { const d = JSON.parse(m.message); if (d && typeof d.t === 'number') pcStand = Object.assign({}, d, { serverT: (m.time || 0) * 1000 }); } catch (e) { /* kein Lebenszeichen */ }
+    });
+  }
+  const uhrHM = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  function pcZustand() {
+    const jetzt = Date.now(), std = new Date().getHours();
+    const ab = pcStand && isFinite(pcStand.ab) ? Number(pcStand.ab) : 8, bis = pcStand && isFinite(pcStand.bis) ? Number(pcStand.bis) : 18;
+    const dienst = ab === bis || (ab < bis ? std >= ab && std < bis : std >= ab || std < bis);
+    const alter = pcStand ? jetzt - pcStand.serverT : Infinity;
+    if (!dienst) return alter < 75 * 60000
+      ? { art: 'pause', kurz: 'Pause bis ' + ab + ' Uhr', lang: 'Außerhalb der Arbeitszeit (' + ab + '–' + bis + ' Uhr) meldet der Fracht-Wächter keine Touren. Der PC ist an.' }
+      : { art: 'pause', kurz: 'Feierabend', lang: 'Außerhalb der Arbeitszeit (' + ab + '–' + bis + ' Uhr). Vom PC kommt gerade kein Lebenszeichen – ab ' + ab + ' Uhr muss er wieder laufen.' };
+    if (!pcStand) return { art: 'aus', kurz: 'Kein Signal vom PC', lang: 'Vom Fracht-Wächter am PC kommt kein Lebenszeichen. Läuft er (ab Version 10.2) und ist Timocom am PC offen? Bis dahin kommen keine neuen Touren.' };
+    if (alter > 14 * 60000) return { art: 'aus', kurz: 'PC offline seit ' + uhrHM(pcStand.serverT), lang: 'Seit ' + uhrHM(pcStand.serverT) + ' Uhr kein Lebenszeichen vom PC – aus, im Ruhezustand, kein Internet oder Chrome mit Timocom zu? Bis dahin kommen keine neuen Touren.' };
+    if (pcStand.abgemeldet) return { art: 'aus', kurz: 'Timocom abgemeldet', lang: 'Timocom ist am PC abgemeldet – es kommen keine neuen Touren. Bitte am PC wieder anmelden.' };
+    if (pcStand.suche === false) return { art: 'warn', kurz: 'Timocom-Suche nicht offen', lang: 'Am PC ist in Timocom gerade keine Frachtsuche offen. Bitte die Suche öffnen und „Automatisch aktualisieren“ einschalten.' };
+    if (!pcStand.liste || pcStand.t - pcStand.liste > 5 * 60000) return { art: 'warn', kurz: 'Timocom-Liste steht' + (pcStand.liste ? ' seit ' + uhrHM(pcStand.liste) : ''), lang: 'Die Suchliste in Timocom aktualisiert sich am PC nicht mehr' + (pcStand.liste ? ' (zuletzt ' + uhrHM(pcStand.liste) + ' Uhr)' : '') + '. Bitte nachsehen: noch angemeldet? „Automatisch aktualisieren“ an? Tab noch offen?' };
+    return { art: 'ok', kurz: null, lang: 'Alles läuft: Der Fracht-Wächter am PC hat sich um ' + uhrHM(pcStand.serverT) + ' Uhr gemeldet, die Timocom-Liste kam um ' + uhrHM(pcStand.liste) + ' Uhr' + (pcStand.angebote ? ' (' + pcStand.angebote + ' Angebote)' : '') + '.' };
+  }
+  function standErklaeren() {
+    if (!lies('kanal', '')) return hinweis('Beispieldaten – trag in den Einstellungen deinen Kanal ein.', 5000);
+    if (!live) return hinweis('Keine Verbindung zu ntfy – hat das Handy Internet?', 5000);
+    hinweis(pcZustand().lang, 7000);
+  }
+  $('stand').addEventListener('click', standErklaeren);
+  $('stand').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); standErklaeren(); } });
 
   // ---------- 🔙 Rückweg: Tour angenommen → der Fracht-Wächter am PC sucht Rückladungen ab dem Entladeort ----------
   // Die App schreibt „an“/„aus“ in den ntfy-Kanal …-auftrag, der Wächter bestätigt mit „ok“ und meldet Treffer mit 🔙.
@@ -1655,7 +1697,9 @@ function angeboteAus(ereignisse) {
     $('stand-text').textContent = 'lädt …'; $('neu').classList.add('dreht');
     if (!live && !$('liste').children.length) { const l = $('liste'); for (let i = 0; i < 4; i++) l.appendChild(h('div', { class: 'zeile platzhalter', 'aria-hidden': 'true' })); }
     try {
-      const [teile, auftragEv] = await Promise.all([Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token))), holeKanal(kanal + '-auftrag', token).catch(() => null)]);
+      const [teile, auftragEv, pcEv] = await Promise.all([Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token))),
+        holeKanal(kanal + '-auftrag', token).catch(() => null), holeKanal(kanal + '-pc', token).catch(() => null)]);
+      if (pcEv) pcAus(pcEv);
       if (auftragEv) { try { auftraegeAus(auftragEv); auftraegeMerken(); } catch (e) { /* egal */ } }
       const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
       const vorher = new Set(angebote.map((a) => a.id)), warLive = live;
@@ -1681,7 +1725,10 @@ function angeboteAus(ereignisse) {
     }
   }
   function zeige(standText) {
-    $('stand-text').textContent = standText;
+    // „Live“ nur, wenn auch am PC alles läuft – sonst steht da, was los ist (PC offline, Timocom abgemeldet, Liste steht)
+    const z = live ? pcZustand() : null;
+    $('stand-text').textContent = z && z.kurz ? z.kurz : standText;
+    $('stand').className = 'stand' + (z ? ' z-' + z.art : '');
     $('neu').classList.toggle('dreht', /lädt/.test(standText));
     document.body.classList.toggle('ist-live', !!live);
     $('beispiel').hidden = live;
