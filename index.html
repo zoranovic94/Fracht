@@ -727,7 +727,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '6.0 (25.11.)';
+  const APP_VERSION = '6.1 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1237,10 +1237,19 @@ function angeboteAus(ereignisse) {
 
   // ---------- 💚 Läuft am PC wirklich alles? Lebenszeichen vom Fracht-Wächter (Kanal …-pc, ab Wächter 10.2) ----------
   let pcStand = null, pcAktivT = 0; // pcAktivT: letzte Meldung/Löschung des Wächters in den Tour-Kanälen – zeigt auch, dass der PC lebt
+  // Mehrere Timocom-Tabs am PC melden sich jeweils selbst. Zählt der beste Zustand der letzten 12 Min.:
+  // ist irgendein Tab auf der Suche und bekommt frische Listen, ist alles gut – auch wenn ein anderer Tab woanders steht.
   function pcAus(ev) {
-    (ev || []).filter((m) => m && m.event === 'message').sort((x, y) => (x.time || 0) - (y.time || 0)).forEach((m) => {
-      try { const d = JSON.parse(m.message); if (d && typeof d.t === 'number') pcStand = Object.assign({}, d, { serverT: (m.time || 0) * 1000 }); } catch (e) { /* kein Lebenszeichen */ }
+    const alle = [];
+    (ev || []).filter((m) => m && m.event === 'message').forEach((m) => {
+      try { const d = JSON.parse(m.message); if (d && typeof d.t === 'number') alle.push(Object.assign({}, d, { serverT: (m.time || 0) * 1000 })); } catch (e) { /* kein Lebenszeichen */ }
     });
+    if (!alle.length) return;
+    alle.sort((x, y) => x.serverT - y.serverT);
+    const neuste = alle[alle.length - 1].serverT;
+    const guete = (d) => (d.abgemeldet ? 0 : d.suche === false ? 1 : !d.liste || d.t - d.liste > 5 * 60000 ? 2 : 3);
+    const best = alle.filter((d) => d.serverT >= neuste - 12 * 60000).reduce((b, d) => (guete(d) >= guete(b) ? d : b));
+    pcStand = Object.assign({}, best, { serverT: neuste, tabs: new Set(alle.filter((d) => d.serverT >= neuste - 12 * 60000).map((d) => d.tab || d.v)).size });
   }
   const uhrHM = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   function pcZustand() {
