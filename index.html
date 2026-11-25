@@ -93,7 +93,7 @@ button { font: inherit; color: inherit; }
 .spalten .c-le, .zeile .c-le { text-align: center; align-items: center; }
 .zeile .c-le b { font-size: 13.5px; font-weight: 700; white-space: nowrap; }
 .zeile .c-le b.eins { opacity: .45; font-weight: 600; }
-.spalten .c-le { display: flex; justify-content: center; } .le-symbol { width: 21px; height: 17px; display: block; margin-top: -2px; }
+.spalten .c-le { display: flex; justify-content: center; } .le-symbol { width: 12px; height: 13px; display: block; margin-top: -1px; }
 /* lange Ortsnamen lieber trennen (Mönchen-gladbach) als abschneiden */
 .zeile .c-ort b { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: anywhere; }
 /* schmale Handys: Spalten enger, Uhrzeiten etwas kleiner, damit „08:00–10:00“ ganz sichtbar bleibt */
@@ -559,7 +559,7 @@ window.startTonSpielen = function (ctx, puffer, wann) {
 <div class="beispiel" id="beispiel">Beispieldaten mit erfundenen Firmen. Tippe oben auf ⚙ und trag deinen Kanal ein, dann erscheinen hier deine echten Touren vom Fracht-Wächter.</div>
 
 <main class="tabelle" id="tabelle">
-  <div class="spalten" aria-hidden="true"><span></span><span>Start</span><span></span><span>Ziel</span><span class="c-le" title="Lade-/Entladestellen"><svg class="le-symbol" viewBox="0 0 24 20" aria-hidden="true"><defs><linearGradient id="leBlau" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b88b4"/><stop offset="1" stop-color="#2d648e"/></linearGradient></defs><rect width="24" height="20" rx="3.5" fill="url(#leBlau)"/><path d="M8.6 17.2V12.6H5.9L10 7.9l4.1 4.7h-2.7v4.6z" fill="#fff"/><path d="M13.1 2.8h2.8v5.7h2.6l-4 4.6-4-4.6h2.6z" fill="#8dc63f"/></svg></span><span class="c-km">km</span><span>Preis</span></div>
+  <div class="spalten" aria-hidden="true"><span></span><span>Start</span><span></span><span>Ziel</span><span class="c-le" title="Lade-/Entladestellen"><svg class="le-symbol" viewBox="0 0 14 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.5V4.5M1.2 7.3L4 4.2l2.8 3.1"/><path d="M10 1.5v10M7.2 8.7l2.8 3.1 2.8-3.1"/></svg></span><span class="c-km">km</span><span>Preis</span></div>
   <div id="liste"></div>
   <div id="uebersicht" hidden><div id="ueb-karte"></div><div class="karte-info" id="ueb-info"></div></div>
 </main>
@@ -693,7 +693,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '5.3 (25.11.)';
+  const APP_VERSION = '5.4 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
