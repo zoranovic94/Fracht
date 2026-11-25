@@ -721,7 +721,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '5.7 (25.11.)';
+  const APP_VERSION = '5.8 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1229,7 +1229,7 @@ function angeboteAus(ereignisse) {
   }
 
   // ---------- 💚 Läuft am PC wirklich alles? Lebenszeichen vom Fracht-Wächter (Kanal …-pc, ab Wächter 10.2) ----------
-  let pcStand = null;
+  let pcStand = null, pcAktivT = 0; // pcAktivT: letzte Meldung/Löschung des Wächters in den Tour-Kanälen – zeigt auch, dass der PC lebt
   function pcAus(ev) {
     (ev || []).filter((m) => m && m.event === 'message').sort((x, y) => (x.time || 0) - (y.time || 0)).forEach((m) => {
       try { const d = JSON.parse(m.message); if (d && typeof d.t === 'number') pcStand = Object.assign({}, d, { serverT: (m.time || 0) * 1000 }); } catch (e) { /* kein Lebenszeichen */ }
@@ -1241,15 +1241,18 @@ function angeboteAus(ereignisse) {
     const jetzt = Date.now(), std = new Date().getHours();
     const ab = pcStand && isFinite(pcStand.ab) ? Number(pcStand.ab) : 8, bis = pcStand && isFinite(pcStand.bis) ? Number(pcStand.bis) : 18;
     const dienst = ab === bis || (ab < bis ? std >= ab && std < bis : std >= ab || std < bis);
-    const alter = pcStand ? jetzt - pcStand.serverT : Infinity;
-    const grenze = (pcStand && pcStand.v === '10.2' && pcStand.dienst === false ? 75 : 14) * 60000; // Wächter 10.2 meldete sich abends nur stündlich
+    // lebt der PC? Lebenszeichen (alle 10 Min., eins darf mal verloren gehen) oder irgendeine Meldung/Löschung in den letzten 15 Min.
+    const grenze = (pcStand && pcStand.v === '10.2' && pcStand.dienst === false ? 75 : pcStand && Number(pcStand.v) >= 10.4 ? 16 : 22) * 60000; // 10.2: abends stündlich · ab 10.4 wird ein verlorenes Lebenszeichen nach 1 Min. wiederholt
+    const zuletzt = Math.max(pcStand ? pcStand.serverT : 0, pcAktivT);
+    const lebt = (pcStand && jetzt - pcStand.serverT <= grenze) || (pcAktivT && jetzt - pcAktivT <= 15 * 60000);
     const z = (art, kurz, lang) => ({ art: art, kurz: kurz, lang: lang, dienst: dienst });
+    if (!pcStand && lebt) return z('ok', null, 'Der Fracht-Wächter am PC hat um ' + uhrHM(pcAktivT) + ' Uhr zuletzt etwas gemeldet. (Mit Wächter 10.2 oder neuer sieht die App auch, ob Timocom angemeldet ist.)');
     if (!pcStand) return z('aus', 'Kein Signal vom PC', 'Vom Fracht-Wächter am PC kommt kein Lebenszeichen. Läuft er (ab Version 10.2) und ist Timocom am PC offen? Bis dahin kommen keine neuen Touren.');
-    if (alter > grenze) return z('aus', 'PC offline seit ' + uhrHM(pcStand.serverT), 'Seit ' + uhrHM(pcStand.serverT) + ' Uhr kein Lebenszeichen vom PC – aus, im Ruhezustand, kein Internet oder Chrome mit Timocom zu? Bis dahin kommen keine neuen Touren.');
+    if (!lebt) return z('aus', 'PC offline seit ' + uhrHM(zuletzt), 'Seit ' + uhrHM(zuletzt) + ' Uhr kein Lebenszeichen vom PC – aus, im Ruhezustand, kein Internet oder Chrome mit Timocom zu? Bis dahin kommen keine neuen Touren.');
     if (pcStand.abgemeldet) return z('aus', 'Timocom abgemeldet', 'Timocom ist am PC abgemeldet – es kommen keine neuen Touren. Bitte am PC wieder anmelden.');
     if (pcStand.suche === false) return z('warn', 'Timocom-Suche nicht offen', 'Am PC ist in Timocom gerade keine Frachtsuche offen. Bitte die Suche öffnen und „Automatisch aktualisieren“ einschalten.');
     if (!pcStand.liste || pcStand.t - pcStand.liste > 5 * 60000) return z('warn', 'Timocom-Liste steht' + (pcStand.liste ? ' seit ' + uhrHM(pcStand.liste) : ''), 'Die Suchliste in Timocom aktualisiert sich am PC nicht mehr' + (pcStand.liste ? ' (zuletzt ' + uhrHM(pcStand.liste) + ' Uhr)' : '') + '. Bitte nachsehen: noch angemeldet? „Automatisch aktualisieren“ an? Tab noch offen?');
-    return z('ok', null, 'Alles läuft: Der Fracht-Wächter am PC hat sich um ' + uhrHM(pcStand.serverT) + ' Uhr gemeldet, die Timocom-Liste kam um ' + uhrHM(pcStand.liste) + ' Uhr' + (pcStand.angebote ? ' (' + pcStand.angebote + ' Angebote)' : '') + '.' +
+    return z('ok', null, 'Alles läuft: Der Fracht-Wächter am PC hat sich um ' + uhrHM(zuletzt) + ' Uhr gemeldet, die Timocom-Liste kam um ' + uhrHM(pcStand.liste) + ' Uhr' + (pcStand.angebote ? ' (' + pcStand.angebote + ' Angebote)' : '') + '.' +
       (dienst ? '' : ' Touren meldet der Wächter nur in deiner Arbeitszeit (' + ab + '–' + bis + ' Uhr).'));
   }
   function standErklaeren() {
@@ -1700,6 +1703,7 @@ function angeboteAus(ereignisse) {
       const [teile, auftragEv, pcEv] = await Promise.all([Promise.all(['', '-heute', '-preis'].map((s) => holeKanal(kanal + s, token))),
         holeKanal(kanal + '-auftrag', token).catch(() => null), holeKanal(kanal + '-pc', token).catch(() => null)]);
       if (pcEv) pcAus(pcEv);
+      pcAktivT = teile.flat().reduce((m, e) => Math.max(m, e && (e.event === 'message' || e.event === 'message_delete') ? (e.time || 0) * 1000 : 0), 0);
       if (auftragEv) { try { auftraegeAus(auftragEv); auftraegeMerken(); } catch (e) { /* egal */ } }
       const heute0 = new Date(); heute0.setHours(0, 0, 0, 0);
       const vorher = new Set(angebote.map((a) => a.id)), warLive = live;
