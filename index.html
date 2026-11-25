@@ -708,6 +708,14 @@ function parseMeldung(msg) {
     else if (/^https:\/\/my\.timocom\.com\//.test(u)) a.timocomUrl = u;
   });
   if (a.ladeStellen > MAX_STELLEN || a.entladeStellen > MAX_STELLEN) return null;
+  // Ist die Meldung zu groß, lässt der Wächter (ab 10.7) den E-Mail-Knopf weg, damit die Beschreibung drinbleibt –
+  // dann baut die App die Anfrage selbst aus der ✉-Zeile
+  if (!a.mailUrl && /^[^\s@?&#]+@[^\s@?&#]+\.[a-z]{2,}$/i.test(a.mail || '')) {
+    const text = [(a.name ? 'Guten Tag ' + a.name.trim() : 'Guten Tag') + ',', '', 'ist Ihre Ladung bei Timocom noch verfügbar?',
+      a.start + ' → ' + a.ziel + (a.ladenText ? ', Laden ' + a.ladenText : '') + (a.lm != null ? ' · ' + String(a.lm).replace('.', ',') + ' m' : '') + (a.t != null ? ' · ' + String(a.t).replace('.', ',') + ' t' : ''),
+      '', 'Fahrzeug: Sattelzug 40 t, Plane, Code XL.', '', 'Über eine kurze Rückmeldung freuen wir uns, gerne auch telefonisch unter 0203/34984493.', ''].join('\n');
+    a.mailUrl = 'mailto:' + a.mail + '?subject=' + encodeURIComponent('Anfrage Ladung ' + a.start + ' → ' + a.ziel + ' – noch verfügbar?') + '&body=' + encodeURIComponent(text);
+  }
   return a;
 }
 // Alle Ereignisse eines oder mehrerer Kanäle -> aktuelle Angebote (gelöschte fallen raus, Updates ersetzen)
@@ -727,7 +735,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '6.1 (25.11.)';
+  const APP_VERSION = '6.2 (25.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
