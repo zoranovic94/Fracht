@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Timocom Fracht-Wächter (MZ Transport)
 // @namespace    https://www.mz-transport.de/
-// @version      12.2
+// @version      12.3
 // @description  Meldet neue, lohnende Frachten aus deiner Timocom-Suche per Push aufs Handy – mit Kostenrechnung, Zeitprüfung, Rückladungs-Check, Kontaktdaten und LKW-Position aus RIO.
 // @match        https://my.timocom.com/*
 // @match        https://iam.timocom.com/*
@@ -194,7 +194,7 @@
   function ntfyHeaders(h) { const t = ntfyToken(); return t ? Object.assign({ 'Authorization': 'Bearer ' + t }, h || {}) : (h || {}); }
   // 💚 Lebenszeichen für die Frachtradar-App (Kanal …-pc): Läuft der Wächter, ist Timocom angemeldet, kommt die Suchliste?
   // Die App zeigt danach „Live“ nur, wenn hier wirklich alles läuft – sonst „PC offline“, „Timocom abgemeldet“ oder „Liste steht“.
-  const WAECHTER_VERSION = '12.2';
+  const WAECHTER_VERSION = '12.3';
   const TAB_ID = Math.random().toString(36).slice(2, 8); // mehrere Timocom-Tabs auseinanderhalten
   function pcMelden(d) {
     if (!origFetch || CONFIG.TESTMODUS) return Promise.resolve(true);
@@ -963,6 +963,13 @@
         }
         n.anschluss = besteAnschluss(n);
         await anschlussMitRoute(n);
+        // Tagestour mit Leerfahrt eingerechnet, aber am Ziel gibt es gute Rückladungen (z. B. unter der Woche):
+        // dann wie eine normale Tour werten – Gold ist möglich. Freitags/schlechte Gegend bleibt es bei „leer heim“.
+        if (n.b.einfach && n.rueck && !n.rueck.fehler && (n.rueck.bewertung !== 'schlecht' || rueckGerettet(n))) {
+          const leer = n.b.deckung;
+          Object.assign(n.b, n.b.einfach);
+          n.b.mitRueck = false; n.b.heimEingerechnet = false; n.b.leerHeimDeckung = leer; n.b.deckungOhneHeim = null; n.b.einfach = null;
+        }
         // Schlechte Rückladung: nicht mehr verstecken, sondern melden – die Farbe geht eine Stufe runter (🟢 → 🟡, still),
         // die Meldung zeigt „↩ Rückladung … schlecht“. Entscheiden tust du.
         if (n.rueck && n.rueck.bewertung === 'schlecht' && !rueckGerettet(n) && !n.stamm && (n.b.deckung === null || n.b.deckung < einst.rueckSchlechtNurAb)) n.rueckSchlecht = true;
@@ -1434,6 +1441,7 @@
       const zielNah = erg.zielHeimKm != null && erg.zielHeimKm <= (einst.heimRadius || 0);
       if (!erg.mitRueck && einst.heimfahrtEinrechnen !== false && rh.deckung != null && rh.deckung >= einst.tagestourGruenAb && !zielNah) {
         erg.deckungOhneHeim = erg.deckung;
+        erg.einfach = { einsatzStunden: erg.einsatzStunden, warteStunden: erg.warteStunden, tage: erg.tage, kosten: erg.kosten, schichten: erg.schichten, deckung: erg.deckung, mindestpreis: erg.mindestpreis };
         Object.assign(erg, rh);
         erg.mitRueck = true; erg.heimEingerechnet = true;
         erg.mindestpreis = erg.kosten * minDeckungFuer(kat) / 100;
@@ -2072,7 +2080,7 @@
   }
   // Gute Folgeladung gefunden → eine „schlechte“ Rückladungs-Gegend ist kein Grund mehr zum Aussortieren
   const rueckGerettet = (n) => !!(n.anschluss && n.anschluss.b.deckung >= einst.minDeckung);
-  const rueckFuerFarbe = (n) => (rueckGerettet(n) ? null : n.rueck);
+  const rueckFuerFarbe = (n) => (rueckGerettet(n) || (n.b && n.b.deckungOhneHeim != null) ? null : n.rueck);
   // Lautstärke: Farbe, passt zum Auflieger (+1), Stammkunde mindestens laut
   // Fracht-App offen? Sie meldet sich jede Minute im Kanal „…-app“. Dann ntfy leise (Stufe 2 = ohne Ton), die App piept selbst.
   async function appStatus() {
@@ -2175,7 +2183,7 @@
   // Fährt danach ohnehin leer heim → Rückladungs-Check unnötig (🔁, gedeckte Tagestour, ☀️ ohne Preis)
   // Ziel liegt schon nahe der Heimat (Duisburg) → danach leer heim, Rückladung egal
   const zielNahHeim = (b) => !!b && b.zielHeimKm != null && b.zielHeimKm <= (einst.heimRadius || 0);
-  const heimFahrt = (b) => !!b && (b.kategorie === 'rund' || b.heimEingerechnet || heimGedeckt(b) || zielNahHeim(b) || (b.kategorie === 'heute' && b.deckung === null));
+  const heimFahrt = (b) => !!b && (b.kategorie === 'rund' || ((b.heimEingerechnet || heimGedeckt(b)) && !b.einfach) || zielNahHeim(b) || (b.kategorie === 'heute' && b.deckung === null));
   function farbeVon(b, rueck) {
     if (!b || !b.machbar) return 'orange';
     if (b.deckung === null) return 'anfrage'; // ohne Preis: 🔵 Preis abklären
@@ -2967,9 +2975,10 @@
       zeilen.push('💶 Preis abklären: mindestens ' + euro(b.mindestpreis) + (b.mitRueck ? ' inkl. Rückfahrt' : '') +
         (b.tagestour && !b.mitRueck ? ' (mit Heimfahrt ' + euro(b.kostenHeim) + ')' : '') + ' · Vorschlag ' + euro(vorschlag(b)) + zahlung);
     }
+    if (b.leerHeimDeckung != null) zeilen.push('🏠 Rückladung in Sicht – ohne Rückladung (leer heim, ' + zahl(b.rueckKm, 0) + ' km) wären es ' + Math.round(b.leerHeimDeckung) + ' %');
     if (b.deckungOhneHeim != null) zeilen.push('🏠 Leerfahrt heim eingerechnet: ' + zahl(b.rueckKm, 0) + ' km, zurück ca. ' + wann(b.zurueck) +
       ' · mit Rückladung statt leer wären es ' + Math.round(b.deckungOhneHeim) + ' %');
-    else if (heimGedeckt(b) && !b.mitRueck) zeilen.push('🏠 Leer heim: ' + zahl(b.rueckKm, 0) + ' km, zurück ca. ' + wann(b.zurueck) +
+    else if (heimGedeckt(b) && !b.mitRueck && b.leerHeimDeckung == null) zeilen.push('🏠 Leer heim: ' + zahl(b.rueckKm, 0) + ' km, zurück ca. ' + wann(b.zurueck) +
       ' · mit Heimfahrt ' + Math.round(b.deckungHeim) + ' % gedeckt');
     else if (zielNahHeim(b) && !b.mitRueck) zeilen.push('🏠 Ziel nur ca. ' + zahl(b.zielHeimKm * einst.umwegFaktor, 0) + ' km vor ' + heimName() +
       ' – danach leer heim, Rückladung egal');
