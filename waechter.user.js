@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Timocom Fracht-Wächter (MZ Transport)
 // @namespace    https://www.mz-transport.de/
-// @version      12.1
+// @version      12.2
 // @description  Meldet neue, lohnende Frachten aus deiner Timocom-Suche per Push aufs Handy – mit Kostenrechnung, Zeitprüfung, Rückladungs-Check, Kontaktdaten und LKW-Position aus RIO.
 // @match        https://my.timocom.com/*
 // @match        https://iam.timocom.com/*
@@ -194,7 +194,7 @@
   function ntfyHeaders(h) { const t = ntfyToken(); return t ? Object.assign({ 'Authorization': 'Bearer ' + t }, h || {}) : (h || {}); }
   // 💚 Lebenszeichen für die Frachtradar-App (Kanal …-pc): Läuft der Wächter, ist Timocom angemeldet, kommt die Suchliste?
   // Die App zeigt danach „Live“ nur, wenn hier wirklich alles läuft – sonst „PC offline“, „Timocom abgemeldet“ oder „Liste steht“.
-  const WAECHTER_VERSION = '12.1';
+  const WAECHTER_VERSION = '12.2';
   const TAB_ID = Math.random().toString(36).slice(2, 8); // mehrere Timocom-Tabs auseinanderhalten
   function pcMelden(d) {
     if (!origFetch || CONFIG.TESTMODUS) return Promise.resolve(true);
@@ -619,6 +619,9 @@
   // 🩺 Abgleich: Ausschlüsse aus älteren Filtern (ADR-, Wort- und Gewichtsprüfung, schlechte Rückladung) gelten ab 11.9 nicht mehr ungeprüft
   if (lade('filterV', '') !== '11.9') { speichere('filterV', '11.9'); speichere('filterStand', Date.now()); }
   const filterStand = lade('filterStand', 0);
+  // 12.2: Tagestouren mit Leerfahrt heim werden jetzt inkl. Leerfahrt eingefärbt – schon gemeldete einmal still neu bewerten
+  if (!lade('farbStand122', 0)) speichere('farbStand122', Date.now());
+  const farbStand = lade('farbStand122', 0);
   let abgleichT = 0;
   // ♻️ Doppel einer gemeldeten Tour, deren gemeldete Fassung weggefallen ist: beim nächsten Auftauchen neu prüfen
   const nochmal = lade('nochmal', {});
@@ -772,6 +775,15 @@
           if (/^✓ gemeldet/.test(x) && !wiederDa[id]) pruefen = true; // gemeldet, aus der App gelöscht, aber noch in der Liste
           if (pruefen) offen.push(o);
         }
+        // schon in der App, aber noch nach alter Rechnung (vor 12.2) eingefärbt: still neu bewerten und Meldung ersetzen
+        const posL = lkwPosition(filter), startL = Math.max(jetzt, freiAbMs());
+        for (const o of zeilen) {
+          const e = o && o.publicOfferId && state.aktiv[o.publicOfferId];
+          if (!e || e.neu122 || (e.t || 0) >= farbStand || neue.some((n) => n.o.publicOfferId === o.publicOfferId)) continue;
+          e.neu122 = true;
+          try { const b = bewerte(o, posL, startL); if (b.machbar && b.deckungOhneHeim != null) neue.push({ o: o, preisGeaendert: false, alterPreis: null, geaendert: true, still: true }); } catch (err) { /* egal */ }
+        }
+        speichere('aktiv', state.aktiv);
         const tab = (o) => { const e = state.tabelle.get(o.publicOfferId); return e && e.deckung != null ? e.deckung : (o.price ? 0 : -1); };
         offen.sort((a, b) => tab(b) - tab(a)).slice(0, 30).forEach((o) => {
           const inh = state.inhalte[inhaltOhnePreis(o)]; if (inh) inh.gemeldet = false;
@@ -787,7 +799,7 @@
         // nicht in DIESER Liste – steht vielleicht in einer gleichen Suche mit anderer Sortierung (zweiter Tab): weiter warten
         if (!o) { state.nachzuegler.push(x); continue; }
         if (o.deleted || state.aktiv[x.id] || neue.some((n) => n.o.publicOfferId === x.id)) continue;
-        neue.unshift({ o: o, preisGeaendert: x.preisGeaendert, alterPreis: x.alterPreis, neuEingestellt: !!x.neuEingestellt, geaendert: !!x.geaendert });
+        neue.unshift({ o: o, preisGeaendert: x.preisGeaendert, alterPreis: x.alterPreis, neuEingestellt: !!x.neuEingestellt, geaendert: !!x.geaendert, still: !!x.still });
       }
       // Läuft noch eine Prüfung (dauert bei vielen Angeboten länger als eine Aktualisierung): alles in die Warteschlange
       haengerLoesen();
@@ -831,7 +843,7 @@
   function inWarteschlange(n, such) {
     state.nachzuegler = state.nachzuegler || [];
     const id = n.o.publicOfferId;
-    if (!state.nachzuegler.some((x) => x.id === id)) state.nachzuegler.push({ id: id, such: such, t: Date.now(), preisGeaendert: n.preisGeaendert, alterPreis: n.alterPreis, neuEingestellt: !!n.neuEingestellt, geaendert: !!n.geaendert, nichtVor: n.nichtVor || 0 });
+    if (!state.nachzuegler.some((x) => x.id === id)) state.nachzuegler.push({ id: id, such: such, t: Date.now(), preisGeaendert: n.preisGeaendert, alterPreis: n.alterPreis, neuEingestellt: !!n.neuEingestellt, geaendert: !!n.geaendert, still: !!n.still, nichtVor: n.nichtVor || 0 });
     grundMerken(id, '– wartet: wird bei der nächsten Aktualisierung geprüft');
   }
 
@@ -875,7 +887,7 @@
       if (!dran.length) return;
       const ids = new Set(dran.map((x) => x.id));
       state.nachzuegler = state.nachzuegler.filter((x) => !ids.has(x.id));
-      const neue = dran.map((x) => ({ o: zeilen.get(x.id).o, preisGeaendert: x.preisGeaendert, alterPreis: x.alterPreis, neuEingestellt: !!x.neuEingestellt, geaendert: !!x.geaendert }));
+      const neue = dran.map((x) => ({ o: zeilen.get(x.id).o, preisGeaendert: x.preisGeaendert, alterPreis: x.alterPreis, neuEingestellt: !!x.neuEingestellt, geaendert: !!x.geaendert, still: !!x.still }));
       pruefeUndMelde(neue, { searchFilter: filter }, lkwPosition(filter), { such: such }).catch((e) => console.warn('[Fracht-Wächter]', e));
     }, 1500);
   }
@@ -1415,7 +1427,18 @@
     erg.mindestpreis = erg.kosten * minDeckungFuer(kat) / 100;
     // Tagestour (Laden und Entladen am selben Tag): Kosten auch inkl. Leerfahrt zurück zum Standort – für 🟢
     erg.tagestour = !!pos && !!erg.ankunftLaden && gleicherTag(erg.ankunftLaden, erg.ende);
-    if (erg.tagestour) { const rh = rechne(true, false, false); erg.deckungHeim = rh.deckung; erg.kostenHeim = rh.kosten; }
+    if (erg.tagestour) {
+      const rh = rechne(true, false, false); erg.deckungHeim = rh.deckung; erg.kostenHeim = rh.kosten;
+      // Deckt die Tagestour auch mit der Leerfahrt heim noch alles, rechnet der Wächter genau so (dann gibt es auch keinen
+      // Rückladungs-Check): Farbe, % und „über Kosten“ gelten inkl. Leerfahrt heim. Ohne Leerfahrt steht nur noch als Info dabei.
+      const zielNah = erg.zielHeimKm != null && erg.zielHeimKm <= (einst.heimRadius || 0);
+      if (!erg.mitRueck && einst.heimfahrtEinrechnen !== false && rh.deckung != null && rh.deckung >= einst.tagestourGruenAb && !zielNah) {
+        erg.deckungOhneHeim = erg.deckung;
+        Object.assign(erg, rh);
+        erg.mitRueck = true; erg.heimEingerechnet = true;
+        erg.mindestpreis = erg.kosten * minDeckungFuer(kat) / 100;
+      }
+    }
     return erg;
   }
 
@@ -2081,6 +2104,7 @@
     if (appIstOffen()) return 2;
     if (n && n.knapp) return 2; // 🤏 knapp: still – erst nachverhandeln
     if (n && n.neuEingestellt) return 2; // ♻️ schon einmal gemeldet, nur neu eingestellt: still
+    if (n && n.still) return 2; // nur neu bewertet (z. B. andere Farbe): still
     try {
       if (istLaLie(n.b)) return 5;
       if (istMorgenLaLie(n.b)) return 4;
@@ -2943,7 +2967,9 @@
       zeilen.push('💶 Preis abklären: mindestens ' + euro(b.mindestpreis) + (b.mitRueck ? ' inkl. Rückfahrt' : '') +
         (b.tagestour && !b.mitRueck ? ' (mit Heimfahrt ' + euro(b.kostenHeim) + ')' : '') + ' · Vorschlag ' + euro(vorschlag(b)) + zahlung);
     }
-    if (heimGedeckt(b) && !b.mitRueck) zeilen.push('🏠 Leer heim: ' + zahl(b.rueckKm, 0) + ' km, zurück ca. ' + wann(b.zurueck) +
+    if (b.deckungOhneHeim != null) zeilen.push('🏠 Leerfahrt heim eingerechnet: ' + zahl(b.rueckKm, 0) + ' km, zurück ca. ' + wann(b.zurueck) +
+      ' · mit Rückladung statt leer wären es ' + Math.round(b.deckungOhneHeim) + ' %');
+    else if (heimGedeckt(b) && !b.mitRueck) zeilen.push('🏠 Leer heim: ' + zahl(b.rueckKm, 0) + ' km, zurück ca. ' + wann(b.zurueck) +
       ' · mit Heimfahrt ' + Math.round(b.deckungHeim) + ' % gedeckt');
     else if (zielNahHeim(b) && !b.mitRueck) zeilen.push('🏠 Ziel nur ca. ' + zahl(b.zielHeimKm * einst.umwegFaktor, 0) + ' km vor ' + heimName() +
       ' – danach leer heim, Rückladung egal');
