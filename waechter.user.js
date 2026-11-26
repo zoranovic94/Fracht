@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Timocom Fracht-Wächter (MZ Transport)
 // @namespace    https://www.mz-transport.de/
-// @version      12.0
+// @version      12.1
 // @description  Meldet neue, lohnende Frachten aus deiner Timocom-Suche per Push aufs Handy – mit Kostenrechnung, Zeitprüfung, Rückladungs-Check, Kontaktdaten und LKW-Position aus RIO.
 // @match        https://my.timocom.com/*
 // @match        https://iam.timocom.com/*
@@ -194,7 +194,7 @@
   function ntfyHeaders(h) { const t = ntfyToken(); return t ? Object.assign({ 'Authorization': 'Bearer ' + t }, h || {}) : (h || {}); }
   // 💚 Lebenszeichen für die Frachtradar-App (Kanal …-pc): Läuft der Wächter, ist Timocom angemeldet, kommt die Suchliste?
   // Die App zeigt danach „Live“ nur, wenn hier wirklich alles läuft – sonst „PC offline“, „Timocom abgemeldet“ oder „Liste steht“.
-  const WAECHTER_VERSION = '12.0';
+  const WAECHTER_VERSION = '12.1';
   const TAB_ID = Math.random().toString(36).slice(2, 8); // mehrere Timocom-Tabs auseinanderhalten
   function pcMelden(d) {
     if (!origFetch || CONFIG.TESTMODUS) return Promise.resolve(true);
@@ -2228,7 +2228,7 @@
     const laender = [...new Set((basis.toZipFilter || []).map((z) => z.countryId).filter(Boolean))];
     if (!laender.length && basis.fromGeoFilter && basis.fromGeoFilter.countryId) laender.push(basis.fromGeoFilter.countryId);
     return { ziel: ziel, tag1: tag1, laender: laender,
-      text: [ziel.address.countryId, (ziel.address.zipCode || '').slice(0, 3), isoTag(tag1), laender.join(',')].join('|') };
+      text: [ziel.address.countryId, (ziel.address.zipCode || '').slice(0, 3), isoTag(tag1), Math.floor(new Date(b.ende).getHours() / 4), laender.join(',')].join('|') };
   }
   function rueckAusCache(o, b, anfrageObj) {
     const s = rueckSchluessel(o, b, anfrageObj);
@@ -2269,7 +2269,16 @@
     const alle = (j && j.invocationResult && j.invocationResult.filteredOfferRows) || [];
     // Nur Ladungen, die zurück Richtung Heimat (Duisburg) gehen: nahe der Heimat enden oder mindestens halb so nah heranbringen
     const abKm = kmLuft(koord(ziel), heimPos());
-    const zeilen = alle.filter((z) => z && !z.deleted && richtungHeim(z, abKm));
+    const richtig = alle.filter((z) => z && !z.deleted && richtungHeim(z, abKm));
+    // 📅 Nur Rückladungen zählen, die nach unserer Entladung erreichbar sind und spätestens ca. 1,5 Tage später abgeladen sind.
+    // Freitags heißt das: bis Samstag geliefert – eine Ladung, die erst Montag ankommt, lässt den LKW übers Wochenende stehen.
+    const zielK = koord(ziel);
+    const zeilen = richtig.filter((z) => {
+      if (ausschluss(z)) return false;
+      try { const b2 = bewerte(z, zielK, b.ende); return b2.machbar && b2.ende - b.ende <= 36 * STD; } catch (e) { return false; }
+    });
+    const wt = new Date(b.ende).getDay(), std = new Date(b.ende).getHours();
+    const wochenende = (wt === 5 && std >= 10) || wt === 6 || wt === 0;
     const gross = zeilen.filter((z) => (z.freightLengthInMeters || 0) >= 7).length;
     const eurKm = zeilen
       .filter((z) => z.price && z.price.amount && waehrung(z.price.currencyId) === 'EUR' && (z.distanceInMeters || 0) >= 100000)
@@ -2285,6 +2294,7 @@
     const wert = {
       ort: ziel.address.city || ziel.address.zipCode, anzahl: zeilen.length, alle: alle.length, voll: alle.length >= 500,
       gross: gross, median: median, mitPreis: eurKm.length, bewertung: bewertung,
+      wochenende: wochenende, spaeter: richtig.length - zeilen.length, tag: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][wt],
       zeilen: zeilen.filter((z) => z && z.price && z.price.amount && waehrung(z.price.currencyId) === 'EUR'),
     };
     state.rueckCache[schluessel] = { t: Date.now(), wert: wert };
@@ -2941,7 +2951,8 @@
       const bew = r.bewertung === 'schlecht' && rueckGerettet(n) ? 'dünn' : r.bewertung; // wenig Auswahl, aber eine gute Folgeladung
       const symbol = { gut: '🟢', mittel: '🟡', dünn: '🟡', schlecht: '🔴' }[bew];
       zeilen.push('↩ Rückladung Richtung ' + heimName() + ' ' + symbol + ' ' + bew + ' · ' + r.gross + (r.voll ? '+' : '') + (r.gross === 1 ? ' Ladung' : ' Ladungen') +
-        (r.median !== null ? ' · ' + zahl(r.median) + ' €/km' : ''));
+        (r.median !== null ? ' · ' + zahl(r.median) + ' €/km' : '') +
+        (r.wochenende ? ' · Entladung ' + r.tag + ': gezählt nur, was bis Sa. ankommt' + (r.spaeter ? ' (' + r.spaeter + ' erst ab Mo.)' : '') : ''));
     } else if (r && r.fehler) {
       zeilen.push('↩ Rückladung nicht geprüft: ' + ({ 'schonend übersprungen': 'zu viele Angebote auf einmal', 'Stundenlimit erreicht': 'Abfrage-Limit pro Stunde erreicht', 'Kontakte gehen vor': 'viele Angebote gerade, Abfragen bleiben für Kontaktdaten' }[r.fehler] || r.fehler));
     }
