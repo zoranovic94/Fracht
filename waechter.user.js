@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Timocom Fracht-Wächter (MZ Transport)
 // @namespace    https://www.mz-transport.de/
-// @version      11.8
+// @version      11.9
 // @description  Meldet neue, lohnende Frachten aus deiner Timocom-Suche per Push aufs Handy – mit Kostenrechnung, Zeitprüfung, Rückladungs-Check, Kontaktdaten und LKW-Position aus RIO.
 // @match        https://my.timocom.com/*
 // @match        https://iam.timocom.com/*
@@ -194,7 +194,7 @@
   function ntfyHeaders(h) { const t = ntfyToken(); return t ? Object.assign({ 'Authorization': 'Bearer ' + t }, h || {}) : (h || {}); }
   // 💚 Lebenszeichen für die Frachtradar-App (Kanal …-pc): Läuft der Wächter, ist Timocom angemeldet, kommt die Suchliste?
   // Die App zeigt danach „Live“ nur, wenn hier wirklich alles läuft – sonst „PC offline“, „Timocom abgemeldet“ oder „Liste steht“.
-  const WAECHTER_VERSION = '11.8';
+  const WAECHTER_VERSION = '11.9';
   const TAB_ID = Math.random().toString(36).slice(2, 8); // mehrere Timocom-Tabs auseinanderhalten
   function pcMelden(d) {
     if (!origFetch || CONFIG.TESTMODUS) return Promise.resolve(true);
@@ -616,6 +616,10 @@
   // ✏️ Fassung je Angebot (Inhalt + Preis): ändert die Firma ein bestehendes Angebot (Preis, Datum, Uhrzeit, Gewicht …),
   // bleibt die Nummer gleich – dann wird es neu geprüft, statt als „schon gesehen“ zu verschwinden
   const fassung = lade('fassung', {});
+  // 🩺 Abgleich: Ausschlüsse aus älteren Filtern (ADR-, Wort- und Gewichtsprüfung, schlechte Rückladung) gelten ab 11.9 nicht mehr ungeprüft
+  if (lade('filterV', '') !== '11.9') { speichere('filterV', '11.9'); speichere('filterStand', Date.now()); }
+  const filterStand = lade('filterStand', 0);
+  let abgleichT = 0;
   // ♻️ Doppel einer gemeldeten Tour, deren gemeldete Fassung weggefallen ist: beim nächsten Auftauchen neu prüfen
   const nochmal = lade('nochmal', {});
   // 11.5: Bis 11.4 wurde ein Zeitstempel vom 26.–31. als „26 t“ gelesen – diese Touren einmal neu prüfen (normal, mit Ton)
@@ -690,8 +694,8 @@
       fassung[id] = neueFassung;
       if (!istNeu && alteFassung && alteFassung !== neueFassung && !(neustart && !nachholen)) {
         const altPreisText = alteFassung.split('|').pop(), altPreis = altPreisText === '' ? null : Number(altPreisText);
-        // alte Meldung (falls in der App) weg – die neue Fassung wird gleich geprüft und ggf. neu gemeldet
-        if (state.aktiv[id]) loesche(id, state.aktiv[id], 'Angebot geändert');
+        // Die alte Meldung bleibt, bis die neue Fassung geprüft ist: passt sie noch, wird die Meldung ersetzt (gleiche Nummer),
+        // passt sie nicht mehr (z. B. Preis gesenkt), wird sie gelöscht – siehe notiere()
         if (state.inhalte[fp]) state.inhalte[fp].gemeldet = false;
         const pg = altPreis !== preis;
         neue.push({ o: o, preisGeaendert: pg, alterPreis: pg ? altPreis : null, geaendert: true });
@@ -750,6 +754,31 @@
         if (g && !/^– (still übernommen|wartet)/.test(g.x)) continue; // schon geprüft (✓/✗) – nicht nochmal
         neue.push({ o: o, preisGeaendert: false, alterPreis: null, nachgeholt: true });
       }
+      // 🩺 Abgleich (alle 5 Min.): Jede Tour in der Liste ist entweder in der App, hat einen gültigen Ausschlussgrund oder wartet.
+      // Alles andere (nie geprüft, Grund vergessen, aus der App gelöscht obwohl noch da, alter Filter) wird jetzt geprüft –
+      // so geht nichts verloren, egal woran es lag.
+      if (jetzt - abgleichT > 5 * MIN) {
+        abgleichT = jetzt;
+        const offen = [];
+        for (const o of zeilen) {
+          if (!o || !o.publicOfferId || o.deleted) continue;
+          const id = o.publicOfferId;
+          if (state.aktiv[id] || neue.some((n) => n.o.publicOfferId === id)) continue;
+          const g = state.gruende[id], x = g ? String(g.x) : '';
+          let pruefen = !g;
+          if (/^– (still übernommen|gleiche Fracht|Preis nur zurückgezogen|außerhalb der Arbeitszeit|Arbeitsbeginn)/.test(x)) pruefen = true;
+          if (/^– wartet/.test(x) && jetzt - g.t > 30 * MIN) pruefen = true;
+          if (/^✗ (Gefahrgut|„|\d+(?:,\d+)? t laut Beschreibung|Rückladung schlecht)/.test(x) && g.t < filterStand) pruefen = true;
+          if (/^✓ gemeldet/.test(x) && !wiederDa[id]) pruefen = true; // gemeldet, aus der App gelöscht, aber noch in der Liste
+          if (pruefen) offen.push(o);
+        }
+        const tab = (o) => { const e = state.tabelle.get(o.publicOfferId); return e && e.deckung != null ? e.deckung : (o.price ? 0 : -1); };
+        offen.sort((a, b) => tab(b) - tab(a)).slice(0, 30).forEach((o) => {
+          const inh = state.inhalte[inhaltOhnePreis(o)]; if (inh) inh.gemeldet = false;
+          if (/^✓ gemeldet/.test(String((state.gruende[o.publicOfferId] || {}).x || ''))) { wiederDa[o.publicOfferId] = jetzt; speichere('wiederDa', wiederDa); }
+          neue.push({ o: o, preisGeaendert: false, alterPreis: null, nachgeholt: true });
+        });
+      }
       // Was in der letzten Runde nicht mehr drankam (Warteschlange), kommt jetzt zuerst
       const warte = (state.nachzuegler || []).filter((x) => x.such === schluessel && jetzt - x.t < 30 * MIN);
       state.nachzuegler = (state.nachzuegler || []).filter((x) => x.such !== schluessel && jetzt - x.t < 30 * MIN);
@@ -758,7 +787,7 @@
         // nicht in DIESER Liste – steht vielleicht in einer gleichen Suche mit anderer Sortierung (zweiter Tab): weiter warten
         if (!o) { state.nachzuegler.push(x); continue; }
         if (o.deleted || state.aktiv[x.id] || neue.some((n) => n.o.publicOfferId === x.id)) continue;
-        neue.unshift({ o: o, preisGeaendert: x.preisGeaendert, alterPreis: x.alterPreis, neuEingestellt: !!x.neuEingestellt });
+        neue.unshift({ o: o, preisGeaendert: x.preisGeaendert, alterPreis: x.alterPreis, neuEingestellt: !!x.neuEingestellt, geaendert: !!x.geaendert });
       }
       // Läuft noch eine Prüfung (dauert bei vielen Angeboten länger als eine Aktualisierung): alles in die Warteschlange
       haengerLoesen();
@@ -802,7 +831,7 @@
   function inWarteschlange(n, such) {
     state.nachzuegler = state.nachzuegler || [];
     const id = n.o.publicOfferId;
-    if (!state.nachzuegler.some((x) => x.id === id)) state.nachzuegler.push({ id: id, such: such, t: Date.now(), preisGeaendert: n.preisGeaendert, alterPreis: n.alterPreis, neuEingestellt: !!n.neuEingestellt });
+    if (!state.nachzuegler.some((x) => x.id === id)) state.nachzuegler.push({ id: id, such: such, t: Date.now(), preisGeaendert: n.preisGeaendert, alterPreis: n.alterPreis, neuEingestellt: !!n.neuEingestellt, geaendert: !!n.geaendert });
     grundMerken(id, '– wartet: wird bei der nächsten Aktualisierung geprüft');
   }
 
@@ -1028,6 +1057,8 @@
   }
 
   function notiere(n, text) {
+    // geänderte Tour passt nicht mehr → die alte Meldung aus der App nehmen
+    if (n && n.geaendert && /^✗/.test(text) && n.o && state.aktiv[n.o.publicOfferId]) loesche(n.o.publicOfferId, state.aktiv[n.o.publicOfferId], 'Angebot geändert – passt nicht mehr');
     state.protokoll.unshift(new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) +
       ' ' + strecke(n.o) + ' ' + text);
     state.protokoll.length = Math.min(state.protokoll.length, 5);
@@ -1044,7 +1075,7 @@
   function gruendeSpeichern() {
     const grenze = Date.now() - 24 * STD;
     let ids = Object.keys(state.gruende).filter((k) => state.gruende[k].t > grenze);
-    if (ids.length > 1500) ids = ids.sort((a, b) => state.gruende[b].t - state.gruende[a].t).slice(0, 1500);
+    if (ids.length > 5000) ids = ids.sort((a, b) => state.gruende[b].t - state.gruende[a].t).slice(0, 5000); // ca. 6–8 Std. bei vollen Listen
     const neu = {};
     ids.forEach((k) => { neu[k] = state.gruende[k]; });
     state.gruende = neu;
@@ -2787,8 +2818,18 @@
       // Farbpunkt vorne: 🥇 Gold · 🟢 sehr gut · 🟡 geht so · 🔴 lohnt nicht · 🔵 Preis abklären – 🥇/🟢 klingeln am lautesten
       const fa = n.knapp ? FARBEN.gelb : FARBEN[farbeVon(n.b, rueckFuerFarbe(n))];
       const sid = sequenzId(n.o);
+      const versuche = (n.sendVersuche || 0) + 1;
       sende(m.mitFarbe ? m.titel : (fa ? fa.symbol : '❔') + ' ' + artSymbol(n.b.kategorie) + pokal + m.titel, m.text, prioVon(n, fa), (einst.kompakt || m.mitFarbe) ? '' : 'articulated_lorry',
-        Object.assign({ topic: kanalFuer(n.b), sequence_id: sid }, appKlick(sid, n.b, n), m.extra));
+        Object.assign({ topic: kanalFuer(n.b), sequence_id: sid }, appKlick(sid, n.b, n), m.extra)).then((ok) => {
+        if (ok || versuche > 5) return;
+        // kam nicht bei ntfy an (kein Netz, Server weg): nicht als gemeldet zählen, in der nächsten Runde nochmal
+        const id = n.o.publicOfferId, e = state.aktiv[id];
+        if (e && !(e.k || []).some((x) => x.topic !== kanalFuer(n.b))) { delete state.aktiv[id]; speichere('aktiv', state.aktiv); }
+        const inh = state.inhalte[inhaltOhnePreis(n.o)]; if (inh) inh.gemeldet = false;
+        n.sendVersuche = versuche;
+        inWarteschlange(n, such);
+        grundMerken(id, '– wartet: Senden an ntfy fehlgeschlagen, ' + versuche + '. Versuch');
+      });
       merke(n, kanalFuer(n.b), sid, such);
     });
     for (const s in state.bestes) if (!s.startsWith(new Date().toDateString())) delete state.bestes[s];
@@ -3125,7 +3166,7 @@
     if (x == null || tiefe > 9) return x;
     if (typeof x === 'string') {
       // nur E-Mail-Adressen und Telefonnummern im Text unkenntlich machen – die Beschreibung selbst bleibt (für ADR-, Gewichts- und Wortprüfungen)
-      return x.replace(/[^\s@<>()"',;]+@[^\s@<>()"',;]+/g, 'MAIL').replace(/\+?\d[\d\s/()-]{6,}\d/g, (t) => (t.replace(/\D/g, '').length >= 7 ? 'TEL' : t));
+      return x.replace(/[^\s@<>()"',;]+@[^\s@<>()"',;]+/g, 'MAIL').replace(/(?:\+|(?<![\d.-])0)\d[\d\s/()-]{5,}\d/g, (t) => (t.replace(/\D/g, '').length >= 7 ? 'TEL' : t));
     }
     if (Array.isArray(x)) return x.map((v) => maskiert(v, feld, tiefe + 1));
     if (typeof x !== 'object') return x;
