@@ -736,7 +736,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '6.5 (26.11.)';
+  const APP_VERSION = '6.6 (26.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1729,15 +1729,17 @@ function angeboteAus(ereignisse) {
   let alleEv = [], evKanal = '', letztesVoll = 0, ladeLaeuft = false, wiederholung = null, verbindungWeg = false;
   async function holeAlle(kanal, token) {
     const topics = ['', '-heute', '-preis', '-auftrag', '-pc'].map((x) => encodeURIComponent(kanal + x)).join(',');
-    const voll = evKanal !== kanal || !alleEv.length || Date.now() - letztesVoll > 30 * 60000;
-    const seit = voll ? '24h' : String(Math.max(0, alleEv.reduce((m, e) => Math.max(m, e.time || 0), 0) - 15));
+    // 3 Tage zurück: Touren, die schon vorgestern gemeldet wurden und noch gelten (z. B. Ladetag erst morgen), bleiben drin.
+    // Was nicht mehr gilt, löscht der Wächter; abgelaufene Ladetage blendet die App selbst aus.
+    const voll = evKanal !== kanal || !alleEv.length || Date.now() - letztesVoll > 60 * 60000;
+    const seit = voll ? '72h' : String(Math.max(0, alleEv.reduce((m, e) => Math.max(m, e.time || 0), 0) - 15));
     const r = await fetch('https://ntfy.sh/' + topics + '/json?poll=1&since=' + seit,
       { headers: token ? { Authorization: 'Bearer ' + token } : {}, signal: AbortSignal.timeout ? AbortSignal.timeout(voll ? 25000 : 12000) : undefined });
     if (!r.ok) throw new Error('ntfy ' + r.status);
     const neu = (await r.text()).split('\n').filter(Boolean).map((z) => { try { return JSON.parse(z); } catch (e) { return null; } }).filter((e) => e && e.id);
     if (voll) { alleEv = neu; letztesVoll = Date.now(); evKanal = kanal; }
     else { const da = new Set(alleEv.map((e) => e.id)); neu.forEach((e) => { if (!da.has(e.id)) alleEv.push(e); }); }
-    const grenze = Date.now() / 1000 - 24 * 3600;
+    const grenze = Date.now() / 1000 - 72 * 3600;
     alleEv = alleEv.filter((e) => (e.time || 0) >= grenze);
     const nach = (x) => alleEv.filter((e) => e.topic === kanal + x);
     return { touren: alleEv.filter((e) => e.topic === kanal || e.topic === kanal + '-heute' || e.topic === kanal + '-preis'), auftrag: nach('-auftrag'), pc: nach('-pc') };

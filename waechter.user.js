@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Timocom Fracht-Wächter (MZ Transport)
 // @namespace    https://www.mz-transport.de/
-// @version      11.7
+// @version      11.8
 // @description  Meldet neue, lohnende Frachten aus deiner Timocom-Suche per Push aufs Handy – mit Kostenrechnung, Zeitprüfung, Rückladungs-Check, Kontaktdaten und LKW-Position aus RIO.
 // @match        https://my.timocom.com/*
 // @match        https://iam.timocom.com/*
@@ -22,7 +22,7 @@
     // Kanal in der ntfy-App. Nicht weitergeben: Wer den Namen kennt, kann mitlesen.
     NTFY_KANAL: '',
     NTFY_SERVER: 'https://ntfy.sh',
-    MAX_MELDUNGEN_AUF_EINMAL: 5,  // mehr auf einmal: Sammelmeldung für den Rest
+    MAX_MELDUNGEN_AUF_EINMAL: 8,  // so viele Meldungen je Aktualisierung – der Rest kommt eine Runde später
     MAX_PRUEFUNGEN_AUF_EINMAL: 15, // so viele neue Angebote pro Aktualisierung werden genau geprüft
     WARNUNG_NACH_MINUTEN: 5,      // so lange keine neue Liste: Warnung aufs Handy
     NEUSTART_NACH_MINUTEN: 15,    // nach so einer Pause werden vorhandene Angebote still übernommen …
@@ -194,7 +194,7 @@
   function ntfyHeaders(h) { const t = ntfyToken(); return t ? Object.assign({ 'Authorization': 'Bearer ' + t }, h || {}) : (h || {}); }
   // 💚 Lebenszeichen für die Frachtradar-App (Kanal …-pc): Läuft der Wächter, ist Timocom angemeldet, kommt die Suchliste?
   // Die App zeigt danach „Live“ nur, wenn hier wirklich alles läuft – sonst „PC offline“, „Timocom abgemeldet“ oder „Liste steht“.
-  const WAECHTER_VERSION = '11.7';
+  const WAECHTER_VERSION = '11.8';
   const TAB_ID = Math.random().toString(36).slice(2, 8); // mehrere Timocom-Tabs auseinanderhalten
   function pcMelden(d) {
     if (!origFetch || CONFIG.TESTMODUS) return Promise.resolve(true);
@@ -613,6 +613,9 @@
 
   // ↺ schon einmal als „wieder da“ neu gemeldet (nur einmal je Tour)
   const wiederDa = lade('wiederDa', {});
+  // ✏️ Fassung je Angebot (Inhalt + Preis): ändert die Firma ein bestehendes Angebot (Preis, Datum, Uhrzeit, Gewicht …),
+  // bleibt die Nummer gleich – dann wird es neu geprüft, statt als „schon gesehen“ zu verschwinden
+  const fassung = lade('fassung', {});
   // ♻️ Doppel einer gemeldeten Tour, deren gemeldete Fassung weggefallen ist: beim nächsten Auftauchen neu prüfen
   const nochmal = lade('nochmal', {});
   // 11.5: Bis 11.4 wurde ein Zeitstempel vom 26.–31. als „26 t“ gelesen – diese Touren einmal neu prüfen (normal, mit Ton)
@@ -664,6 +667,7 @@
     state.letztePos = pos;
 
     tabelleBewerten(zeilen, pos);
+    if (!/^rueck:/.test(schluessel)) probeListen.set(schluessel, { t: jetzt, filter: filter, zeilen: zeilen });
 
     if (state.gewarnt) {
       state.gewarnt = false;
@@ -682,6 +686,17 @@
       const preis = o.price ? o.price.amount : null;
       // „gemeldet“ bleibt nur, solange der Preis gleich bleibt
       state.inhalte[fp] = { preis: preis, t: jetzt, gemeldet: !!(alt && alt.gemeldet && alt.preis === preis), id: (alt && alt.id) || id };
+      const neueFassung = fp + '|' + (preis === null ? '' : preis), alteFassung = fassung[id];
+      fassung[id] = neueFassung;
+      if (!istNeu && alteFassung && alteFassung !== neueFassung && !(neustart && !nachholen)) {
+        const altPreisText = alteFassung.split('|').pop(), altPreis = altPreisText === '' ? null : Number(altPreisText);
+        // alte Meldung (falls in der App) weg – die neue Fassung wird gleich geprüft und ggf. neu gemeldet
+        if (state.aktiv[id]) loesche(id, state.aktiv[id], 'Angebot geändert');
+        if (state.inhalte[fp]) state.inhalte[fp].gemeldet = false;
+        const pg = altPreis !== preis;
+        neue.push({ o: o, preisGeaendert: pg, alterPreis: pg ? altPreis : null, geaendert: true });
+        continue;
+      }
 
       // ↺ Schon gemeldet, dann aus der App gelöscht (z. B. weil sie in einer anderen Liste fehlte) – steht aber wieder in einer
       // Suchliste: einmal neu prüfen und melden, damit sie nicht verloren geht
@@ -727,7 +742,7 @@
         if (!o || !o.publicOfferId || o.deleted) continue;
         const id = o.publicOfferId, e = state.tabelle.get(id), g = state.gruende[id];
         if (!e) continue;
-        const lohnt = e.farbe === 'gruen' || e.farbe === 'gold' || e.farbe === 'gelb' || (e.farbe === 'orange' && e.deckung != null && e.deckung >= knappGrenze);
+        const lohnt = e.farbe === 'gruen' || e.farbe === 'gold' || e.farbe === 'gelb' || e.farbe === 'anfrage' || (e.farbe === 'orange' && e.deckung != null && e.deckung >= knappGrenze);
         if (!lohnt) continue;
         if (state.aktiv[id] || neue.some((n) => n.o.publicOfferId === id)) continue;
         const inh = state.inhalte[inhaltOhnePreis(o)];
@@ -755,6 +770,8 @@
 
     aufraeumen(jetzt);
     speichere('gesehen', state.gesehen);
+    Object.keys(fassung).forEach((k) => { if (!state.gesehen[k]) delete fassung[k]; });
+    speichere('fassung', fassung);
     speichere('inhalte', state.inhalte);
     speichere('suchen', state.suchen);
     gruendeSpeichern();
@@ -877,11 +894,9 @@
         }
         n.anschluss = besteAnschluss(n);
         await anschlussMitRoute(n);
-        if (n.rueck && n.rueck.bewertung === 'schlecht' && !rueckGerettet(n) && !n.stamm) {
-          if (n.b.deckung === null || n.b.deckung < einst.rueckSchlechtNurAb) {
-            notiere(n, '✗ Rückladung schlecht'); continue;
-          }
-        }
+        // Schlechte Rückladung: nicht mehr verstecken, sondern melden – die Farbe geht eine Stufe runter (🟢 → 🟡, still),
+        // die Meldung zeigt „↩ Rückladung … schlecht“. Entscheiden tust du.
+        if (n.rueck && n.rueck.bewertung === 'schlecht' && !rueckGerettet(n) && !n.stamm && (n.b.deckung === null || n.b.deckung < einst.rueckSchlechtNurAb)) n.rueckSchlecht = true;
       }
       passend.push(n);
     }
@@ -900,6 +915,7 @@
           try {
             const j = await api('GET', API_SUCHE + '/' + encodeURIComponent(n.o.publicOfferId));
             n.d = j && j.invocationResult;
+            if (n.d) { probeDetails.unshift({ id: n.o.publicOfferId, d: n.d }); probeDetails.length = Math.min(probeDetails.length, 40); }
           } catch (e) { n.kontaktFehler = String(e.message || e); }
           const ag = n.d && ausschluss(n.o, n.d);
           if (ag) { notiere(n, '✗ ' + ag); mitKontakt--; continue; }
@@ -918,6 +934,15 @@
   // Reihenfolge fürs Melden: erst das Beste jedes Reiters, dann das Zweitbeste jedes Reiters usw. –
   // so verdrängt eine starke Fernfahrt nicht das einzige ☀️-Angebot
   function verteile(liste) {
+    // 🔵 ohne Preis ganz nach hinten: erst alle Touren mit Preis (die klingeln können), dann die Preisanfragen
+    const ohne = liste.filter((n) => n.b.deckung === null).sort(besteZuerst);
+    const mit = liste.filter((n) => n.b.deckung !== null);
+    liste.length = 0; mit.forEach((n) => liste.push(n));
+    verteileMitPreis(liste);
+    ohne.forEach((n) => liste.push(n));
+    return liste;
+  }
+  function verteileMitPreis(liste) {
     liste.sort(besteZuerst);
     const rang = {}, r = new Map();
     liste.forEach((n) => { const k = n.b.kategorie; rang[k] = (rang[k] || 0) + 1; r.set(n, rang[k]); });
@@ -1488,11 +1513,47 @@
     });
     return aus;
   }
+  // Nur echter Freitext für Wortprüfungen (ADR, Sonderfracht, Gewicht): Warenart, Bemerkungen, Zusatzinfos.
+  // Keine Firmen-/Personennamen, Adressen, Links, E-Mails, Telefonnummern, Datumswerte oder Kennungen –
+  // sonst schlägt z. B. eine Webseite „adr-spedition.de“, ein Link mit „…&adr=false“ oder ein Zeitstempel „…-26T08:15“ an.
+  const FREITEXT_OHNE_ZWEIG = /^(customer|contactperson|contactpersons|contactchannels|address|coordinate|payment|route|company|companydata|customerdata|links?)$/i;
+  const FREITEXT_OHNE_FELD = /(url|uri|link|logo|e?mail|phone|tel|fax|mobile|name|city|zip|street|country|date|time|since|id|ids|language|languages|currency|rating)$/i;
+  const OHNE_WERT = /^(https?:|www\.)|@|^\+?[\d\s/()-]{7,}$|^\d{4}-\d{2}-\d{2}/i;
+  function freitexte(x, aus, tiefe, feld) {
+    if (x == null || tiefe > 7) return aus;
+    if (typeof x === 'string') { if (!(feld && FREITEXT_OHNE_FELD.test(feld)) && !OHNE_WERT.test(x.trim())) aus.push(x); return aus; }
+    if (Array.isArray(x)) { x.forEach((v) => freitexte(v, aus, tiefe + 1, feld)); return aus; }
+    if (typeof x === 'object') Object.keys(x).forEach((k) => {
+      if (FREITEXT_OHNE_ZWEIG.test(k)) return;
+      if (x[k] === true && /adr|gefahr|hazard|dangerous/i.test(k)) aus.push(k); // z. B. „dangerousGoods: true“
+      freitexte(x[k], aus, tiefe + 1, k);
+    });
+    return aus;
+  }
+  const freitextVon = (o, d) => normal(freitexte(o, [], 0, '').concat(d ? freitexte(d, [], 0, '') : []).join(' | '));
+  // „kein …“, „ohne …“, „non-…“ davor oder „… nein“, „…-frei“, „… nicht erforderlich“ dahinter → zählt nicht
+  const VERNEINT_DAVOR = /(?:kein|keine|keinen|keiner|ohne|nicht|no|non|frei von|not|w\/o)[\s:.-]*$/;
+  const VERNEINT_DANACH = /^(?:[\s:=-]*(?:nein|no|none|keins?|0|nicht|not|frei|free)(?![a-z0-9])|frei|free|-frei|-free)/;
+  function verneint(text, start, ende) {
+    if (VERNEINT_DAVOR.test(text.slice(Math.max(0, start - 18), start).trim())) return true;
+    return VERNEINT_DANACH.test(text.slice(ende, ende + 16));
+  }
   function sonderfracht(o, d) {
     const woerter = String(einst.ausschlussWoerter || '').split(/[,;\n]+/).map((w) => w.trim()).filter((w) => w.length >= 3);
     if (!woerter.length) return null;
-    const text = normal(textwerte(o, [], 0).concat(d ? textwerte(d, [], 0) : []).join(' | '));
-    for (const w of woerter) if (text.indexOf(normal(w)) !== -1) return w;
+    const text = freitextVon(o, d);
+    for (const w of woerter) {
+      const nw = normal(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\s-]+/g, '[\\s-]*');
+      const re = new RegExp('(?:^|[^a-z0-9])(' + nw + ')', 'g');
+      let m;
+      while ((m = re.exec(text))) {
+        const start = m.index + m[0].length - m[1].length, ende = start + m[1].length;
+        // kurze Wörter („A-Schild“) nur als ganzes Wort; nicht, wenn verneint („kein Tieflader nötig“, „Überbreite: nein“)
+        if (m[1].length <= 8 && /[a-z0-9]/.test(text.charAt(ende))) continue;
+        if (verneint(text, start, ende)) continue;
+        return w;
+      }
+    }
     return null;
   }
 
@@ -1501,13 +1562,13 @@
   const GEFAHR_RE = /(?:^|[^a-z0-9])(adr|gefahrgut\w*|gefahrstoff\w*|gefahrenklasse|gefaehrliche[sn]? gueter|gefaehrliches gut|dangerous ?goods?|hazardous|hazmat|un[- ]?nr\.?\s?\d{4}|un[- ]?nummer|un\s?\d{4})(?![a-z0-9])/g;
   function gefahrgut(o, d) {
     if (einst.gefahrgutAusschliessen === false) return null;
-    const text = normal(textwerte(o, [], 0).concat(d ? textwerte(d, [], 0) : []).join(' | '));
+    const text = freitextVon(o, d);
     GEFAHR_RE.lastIndex = 0;
     let m;
     while ((m = GEFAHR_RE.exec(text))) {
-      const davor = text.slice(Math.max(0, m.index - 18), m.index + 1);
-      if (/(?:kein|keine|keinen|ohne|nicht|no|non|frei von|not)[\s:-]*$/.test(davor.trim())) continue;
-      if (/^[\s:=-]*(?:nein|no|none|keins?|0)(?![a-z0-9])/.test(text.slice(m.index + m[0].length, m.index + m[0].length + 12))) continue; // „Gefahrgut: nein“
+      const start = m.index + m[0].length - m[1].length, ende = m.index + m[0].length;
+      if (/frei$|free$/.test(m[1])) continue; // „gefahrgutfrei“
+      if (verneint(text, start, ende)) continue; // „kein ADR“, „ADR: nein“, „ADR-frei“, „ADR nicht erforderlich“
       return m[1].trim();
     }
     return null;
@@ -1535,7 +1596,7 @@
   // 40 t / 44 t sind fast immer die LKW-Klasse („40-Tonner“), nicht das Ladungsgewicht – die zählen nicht.
   function gewichtImText(o, d) {
     // Zeitstempel („2026-11-26T08:15:00“) und Datumsangaben („26.11.“) vorher entfernen – sonst wird aus dem 26. ein „26 t“
-    const text = normal(textwerte(o, [], 0).concat(d ? textwerte(d, [], 0) : []).join(' | '))
+    const text = freitextVon(o, d)
       .replace(/\d{4}-\d{2}-\d{2}t\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:z|[+-]\d{2}:?\d{2})?/g, ' ')
       .replace(/(^|[^\d.,])\d{1,2}\.\d{2}\.(?:\d{2,4})?/g, '$1 ');
     let max = 0;
@@ -2826,7 +2887,7 @@
     if (mailK) zeilen.push('✉ ' + mailK + ' · Knopf „E-Mail-Anfrage“ = fertiger Text');
     const fd = d.freightDescription || {};
     const hinweis = [fd.typeOfGoods && fd.typeOfGoods.trim(), d.publicRemark && d.publicRemark.trim()].filter(Boolean).join(' · ');
-    if (hinweis) zeilen.push('ℹ ' + (hinweis.length > 70 ? hinweis.slice(0, 68) + '…' : hinweis));
+    if (hinweis) zeilen.push('ℹ ' + (hinweis.length > 400 ? hinweis.slice(0, 398) + '…' : hinweis)); // ganze Beschreibung (wird nur bei Platzmangel gekürzt)
 
     if (n.neuEingestellt) zeilen.push('♻️ Neu eingestellt – war schon gemeldet');
     if (n.knapp && b.preis) zeilen.unshift('🤏 Knapp: ' + Math.round(b.deckung) + ' % – Preisvorschlag ' + euro(knappVorschlag(b)) + ' (100 % = ' + euro(Math.ceil(preis100(b) / 10) * 10) + ')');
@@ -3040,6 +3101,63 @@
       pruefung: state.pruefungLaeuft ? Math.round((jetzt - (state.pruefungSeit || jetzt)) / 1000) : 0, haenger: state.haengerT || 0 })
       .then((ok) => { if (!ok && pcPulsT === jetzt) { pcPulsT = 0; pcPulsKey = ''; } });
   }
+  // 📊 Gründe der letzten Stunde, zusammengefasst (z. B. „✗ Deckung #“: 212×) – zeigt, ob ein Filter zu viel aussortiert
+  function gruendeStatistik() {
+    const grenzeT = Date.now() - STD, zaehl = {};
+    for (const id in state.gruende) {
+      const g = state.gruende[id];
+      if (!g || g.t < grenzeT) continue;
+      const key = String(g.x).replace(/\([^)]*\)/g, '').replace(/„[^“]*“/g, '„…“').replace(/\d+(?:[.,]\d+)*/g, '#').replace(/\s+/g, ' ').trim().slice(0, 60);
+      const z = zaehl[key] = zaehl[key] || { n: 0, b: [] };
+      z.n++;
+      if (z.b.length < 2) {
+        const e = state.tabelle.get(id);
+        z.b.push((e && e.s ? e.s.replace(/\b\d{5} /g, '') : id) + (e && e.p ? ' ' + e.p + ' €' : '') + (e && e.farbe ? ' [' + e.farbe + ']' : '') + ' · ' + String(g.x).slice(0, 70));
+      }
+    }
+    return Object.keys(zaehl).map((k) => [k, zaehl[k].n, zaehl[k].b]).sort((a, b) => b[1] - a[1]).slice(0, 30);
+  }
+
+  // 🧪 Datenprobe: die aktuellen Suchlisten + zuletzt abgerufene Details (ohne Ansprechpartner, Telefon, E-Mail) als Datei in den
+  // Kanal …-diag (verfällt nach 24 Std.). Damit lässt sich jeder Filter mit echten Timocom-Daten nachprüfen. Einmal je Version + per Knopf.
+  const probeListen = new Map(), probeDetails = [];
+  function maskiert(x, feld, tiefe) {
+    if (x == null || tiefe > 9) return x;
+    if (typeof x === 'string') {
+      // nur E-Mail-Adressen und Telefonnummern im Text unkenntlich machen – die Beschreibung selbst bleibt (für ADR-, Gewichts- und Wortprüfungen)
+      return x.replace(/[^\s@<>()"',;]+@[^\s@<>()"',;]+/g, 'MAIL').replace(/\+?\d[\d\s/()-]{6,}\d/g, (t) => (t.replace(/\D/g, '').length >= 7 ? 'TEL' : t));
+    }
+    if (Array.isArray(x)) return x.map((v) => maskiert(v, feld, tiefe + 1));
+    if (typeof x !== 'object') return x;
+    const aus = {};
+    Object.keys(x).forEach((k) => {
+      if (/^(contactPerson|contactPersons|contactChannels|instantMessenger)$/i.test(k)) { aus[k] = 'ENTFERNT'; return; }
+      if (/(mail|phone|fax|mobile|messenger)/i.test(k)) { aus[k] = x[k] ? 'ENTFERNT' : x[k]; return; }
+      aus[k] = maskiert(x[k], k, tiefe + 1);
+    });
+    return aus;
+  }
+  let probeT = 0;
+  function probeSenden(grund) {
+    if (!origFetch || CONFIG.TESTMODUS || !binLeiter || !probeListen.size) return Promise.resolve(false);
+    if (grund !== 'knopf' && (lade('probeV', '') === WAECHTER_VERSION || Date.now() - probeT < 30 * MIN)) return Promise.resolve(false);
+    probeT = Date.now();
+    const einstOffen = Object.assign({}, einst); ['ntfyToken', 'ntfyKanal', 'mailTelefon', 'mailSignatur'].forEach((k) => delete einstOffen[k]);
+    const ids = new Set();
+    const listen = Array.from(probeListen.values()).filter((l) => Date.now() - l.t < 10 * MIN).map((l) => {
+      l.zeilen.forEach((o) => o && ids.add(o.publicOfferId));
+      return { t: l.t, filter: l.filter, zeilen: maskiert(l.zeilen, '', 0) };
+    });
+    const gruende = {}, tabelle = {};
+    ids.forEach((id) => { if (state.gruende[id]) gruende[id] = state.gruende[id]; const e = state.tabelle.get(id); if (e) tabelle[id] = { f: e.farbe, d: e.deckung }; });
+    const daten = { v: WAECHTER_VERSION, t: Date.now(), grund: grund, einst: einstOffen, pos: state.letztePos || null, rio: state.rio && state.rio.lkw ? state.rio.lkw.map((l) => ({ lat: l.lat, lon: l.lon, zeit: l.zeit })) : null,
+      listen: listen, details: maskiert(probeDetails.slice(0, 40), '', 0), gruende: gruende, tabelle: tabelle, aktiv: Object.keys(state.aktiv).length };
+    const text = JSON.stringify(daten);
+    if (text.length > 20 * 1024 * 1024) return Promise.resolve(false);
+    return meinFetch(CONFIG.NTFY_SERVER + '/' + encodeURIComponent(CONFIG.NTFY_KANAL + '-diag'), { method: 'PUT', body: text,
+      headers: ntfyHeaders({ 'Filename': 'probe-' + WAECHTER_VERSION + '.json' }) }).then((r) => { if (r.ok) speichere('probeV', WAECHTER_VERSION); return r.ok; }).catch(() => false);
+  }
+
   // 🔎 Warum nicht gemeldet? Alle Angebote, die in Timocom 🥇/🟢/🟡 gefärbt sind, aber nicht in der App stehen – mit Grund.
   // Geht an den Kanal …-warum (höchstens alle 3 Min., nur bei Änderung), damit man es auch ohne Blick auf den PC sieht.
   let warumT = 0, warumHash = '';
@@ -3062,7 +3180,9 @@
     warumHash = h; warumT = jetzt;
     try { zaehleNtfy(); } catch (e) { /* egal */ }
     meinFetch(CONFIG.NTFY_SERVER + '/' + encodeURIComponent(CONFIG.NTFY_KANAL + '-warum'), { method: 'POST', headers: ntfyHeaders(),
-      body: JSON.stringify({ v: WAECHTER_VERSION, t: jetzt, n: liste }) }).catch(() => { warumT = 0; });
+      body: (() => { let stat = gruendeStatistik(), txt = JSON.stringify({ v: WAECHTER_VERSION, t: jetzt, n: liste, stat: stat });
+        while (txt.length > 3900 && stat.length) { stat = stat.slice(0, -1); txt = JSON.stringify({ v: WAECHTER_VERSION, t: jetzt, n: liste, stat: stat }); }
+        return txt; })() }).catch(() => { warumT = 0; });
   }
   // ⬆ Automatische Updates: neue Version auf GitHub? Dann Knopf im Kasten (ein Klick, Tampermonkey fragt „Aktualisieren“) und eine Meldung
   const UPDATE_META = 'https://zoranovic94.github.io/Fracht/waechter.meta.js';
@@ -3087,11 +3207,13 @@
     }).catch(() => { updateT = Date.now() - 25 * MIN; }); // kein Netz: in 5 Min. nochmal
   }
   setTimeout(updatePruefen, 20 * 1000);
+  const startT = Date.now();
   setTimeout(pcLebenszeichen, 15 * 1000);
   setInterval(() => {
     try { pcLebenszeichen(); } catch (e) { /* egal */ }
     try { warumSenden(); } catch (e) { /* egal */ }
     try { updatePruefen(); } catch (e) { /* egal */ }
+    try { if (Date.now() - startT > 4 * MIN && probeListen.size) probeSenden('auto'); } catch (e) { /* egal */ }
     if (!aufSuchseite()) {
       state.letzteAntwort = 0;
       setzeStatus('Keine Frachtsuche offen');
@@ -3326,7 +3448,7 @@
     box.appendChild(folgeKnopf);
     const diagKnopf = el('button', knopfCss + 'background:#fff;color:#c8102e;', '🔍 Diagnose senden');
     diagKnopf.title = 'Schickt den Aufbau der zuletzt gesehenen Timocom-Daten (ohne Namen, E-Mails, Telefonnummern) zur Fehlersuche.';
-    diagKnopf.onclick = () => { diagnoseSenden().then((ok) => setzeStatus(ok ? 'Diagnose gesendet ✔' : 'Diagnose fehlgeschlagen ✖')).catch(() => setzeStatus('Diagnose fehlgeschlagen ✖')); };
+    diagKnopf.onclick = () => { Promise.all([diagnoseSenden().catch(() => false), probeSenden('knopf')]).then(([a, b]) => setzeStatus(a || b ? 'Diagnose gesendet ✔' : 'Diagnose fehlgeschlagen ✖')); };
     box.appendChild(diagKnopf);
     const knopfEinst = el('button', knopfCss + 'background:#fff;color:#c8102e;', einstOffen ? 'Einstellungen zu' : '⚙ Einstellungen');
     knopfEinst.onclick = () => { einstOffen = !einstOffen; zeichne(); };
