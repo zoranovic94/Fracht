@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Timocom Fracht-Wächter (MZ Transport)
 // @namespace    https://www.mz-transport.de/
-// @version      11.9
+// @version      12.0
 // @description  Meldet neue, lohnende Frachten aus deiner Timocom-Suche per Push aufs Handy – mit Kostenrechnung, Zeitprüfung, Rückladungs-Check, Kontaktdaten und LKW-Position aus RIO.
 // @match        https://my.timocom.com/*
 // @match        https://iam.timocom.com/*
@@ -194,7 +194,7 @@
   function ntfyHeaders(h) { const t = ntfyToken(); return t ? Object.assign({ 'Authorization': 'Bearer ' + t }, h || {}) : (h || {}); }
   // 💚 Lebenszeichen für die Frachtradar-App (Kanal …-pc): Läuft der Wächter, ist Timocom angemeldet, kommt die Suchliste?
   // Die App zeigt danach „Live“ nur, wenn hier wirklich alles läuft – sonst „PC offline“, „Timocom abgemeldet“ oder „Liste steht“.
-  const WAECHTER_VERSION = '11.9';
+  const WAECHTER_VERSION = '12.0';
   const TAB_ID = Math.random().toString(36).slice(2, 8); // mehrere Timocom-Tabs auseinanderhalten
   function pcMelden(d) {
     if (!origFetch || CONFIG.TESTMODUS) return Promise.resolve(true);
@@ -780,8 +780,8 @@
         });
       }
       // Was in der letzten Runde nicht mehr drankam (Warteschlange), kommt jetzt zuerst
-      const warte = (state.nachzuegler || []).filter((x) => x.such === schluessel && jetzt - x.t < 30 * MIN);
-      state.nachzuegler = (state.nachzuegler || []).filter((x) => x.such !== schluessel && jetzt - x.t < 30 * MIN);
+      const warte = (state.nachzuegler || []).filter((x) => x.such === schluessel && jetzt - x.t < 30 * MIN && !(x.nichtVor > jetzt));
+      state.nachzuegler = (state.nachzuegler || []).filter((x) => (x.such !== schluessel || x.nichtVor > jetzt) && jetzt - x.t < 30 * MIN);
       for (const x of warte.reverse()) {
         const o = state.letzteZeilen.get(x.id);
         // nicht in DIESER Liste – steht vielleicht in einer gleichen Suche mit anderer Sortierung (zweiter Tab): weiter warten
@@ -831,7 +831,7 @@
   function inWarteschlange(n, such) {
     state.nachzuegler = state.nachzuegler || [];
     const id = n.o.publicOfferId;
-    if (!state.nachzuegler.some((x) => x.id === id)) state.nachzuegler.push({ id: id, such: such, t: Date.now(), preisGeaendert: n.preisGeaendert, alterPreis: n.alterPreis, neuEingestellt: !!n.neuEingestellt, geaendert: !!n.geaendert });
+    if (!state.nachzuegler.some((x) => x.id === id)) state.nachzuegler.push({ id: id, such: such, t: Date.now(), preisGeaendert: n.preisGeaendert, alterPreis: n.alterPreis, neuEingestellt: !!n.neuEingestellt, geaendert: !!n.geaendert, nichtVor: n.nichtVor || 0 });
     grundMerken(id, '– wartet: wird bei der nächsten Aktualisierung geprüft');
   }
 
@@ -849,7 +849,35 @@
     if (state.pruefungLaeuft) { neue.forEach((n) => inWarteschlange(n, (opts && opts.such) || suchSchluessel((anfrageObj && anfrageObj.searchFilter) || {}))); return; }
     const nr = ++pruefungNr;
     state.pruefungLaeuft = true; state.pruefungSeit = Date.now();
-    try { return await pruefeUndMeldeEcht(neue, anfrageObj, pos, opts); } finally { if (nr === pruefungNr) state.pruefungLaeuft = false; }
+    try { return await pruefeUndMeldeEcht(neue, anfrageObj, pos, opts); } finally { if (nr === pruefungNr) { state.pruefungLaeuft = false; schlangeWeiter(); } }
+  }
+
+  // ⏩ Warteschlange gleich weiter abarbeiten – nicht erst, wenn zufällig eine Liste kommt, während gerade nichts geprüft wird.
+  // Die Besten zuerst (Touren mit Preis nach Deckung, dann Preisanfragen); die Angebote kommen aus den aktuellen Listen beider Tabs.
+  let schlangeT = null;
+  function schlangeWeiter() {
+    if (schlangeT || !binLeiter || !imDienst() || !(state.nachzuegler || []).length) return;
+    schlangeT = setTimeout(() => {
+      schlangeT = null;
+      if (state.pruefungLaeuft || !(state.nachzuegler || []).length) return;
+      const jetzt = Date.now();
+      const zeilen = new Map();
+      for (const [k, l] of probeListen) if (jetzt - l.t < 10 * MIN) l.zeilen.forEach((o) => { if (o && o.publicOfferId && !o.deleted && !zeilen.has(o.publicOfferId)) zeilen.set(o.publicOfferId, { o: o, such: k, filter: l.filter }); });
+      // weg, was nicht mehr in einer Liste steht oder schon gemeldet ist; Rest nach Wert sortieren
+      state.nachzuegler = state.nachzuegler.filter((x) => jetzt - x.t < 30 * MIN && zeilen.has(x.id) && !state.aktiv[x.id]);
+      if (!state.nachzuegler.length) return;
+      const wert = (x) => { const e = state.tabelle.get(x.id); return e && e.deckung != null ? e.deckung : -1; };
+      state.nachzuegler.sort((a, b) => wert(b) - wert(a));
+      const bereit = state.nachzuegler.find((x) => !(x.nichtVor > jetzt));
+      if (!bereit) return;
+      const such = zeilen.get(bereit.id).such, filter = zeilen.get(bereit.id).filter;
+      const dran = state.nachzuegler.filter((x) => zeilen.get(x.id).such === such && !(x.nichtVor > jetzt)).slice(0, CONFIG.MAX_PRUEFUNGEN_AUF_EINMAL);
+      if (!dran.length) return;
+      const ids = new Set(dran.map((x) => x.id));
+      state.nachzuegler = state.nachzuegler.filter((x) => !ids.has(x.id));
+      const neue = dran.map((x) => ({ o: zeilen.get(x.id).o, preisGeaendert: x.preisGeaendert, alterPreis: x.alterPreis, neuEingestellt: !!x.neuEingestellt, geaendert: !!x.geaendert }));
+      pruefeUndMelde(neue, { searchFilter: filter }, lkwPosition(filter), { such: such }).catch((e) => console.warn('[Fracht-Wächter]', e));
+    }, 1500);
   }
 
   async function pruefeUndMeldeEcht(neue, anfrageObj, pos, opts) {
@@ -2826,7 +2854,7 @@
         const id = n.o.publicOfferId, e = state.aktiv[id];
         if (e && !(e.k || []).some((x) => x.topic !== kanalFuer(n.b))) { delete state.aktiv[id]; speichere('aktiv', state.aktiv); }
         const inh = state.inhalte[inhaltOhnePreis(n.o)]; if (inh) inh.gemeldet = false;
-        n.sendVersuche = versuche;
+        n.sendVersuche = versuche; n.nichtVor = Date.now() + 2 * MIN; // ntfy nicht erreichbar: in 2 Min. nochmal
         inWarteschlange(n, such);
         grundMerken(id, '– wartet: Senden an ntfy fehlgeschlagen, ' + versuche + '. Versuch');
       });
