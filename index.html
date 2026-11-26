@@ -735,7 +735,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '6.2 (25.11.)';
+  const APP_VERSION = '6.3 (26.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1276,7 +1276,11 @@ function angeboteAus(ereignisse) {
     if (pcStand.abgemeldet) return z('aus', 'Timocom abgemeldet', 'Timocom ist am PC abgemeldet – es kommen keine neuen Touren. Bitte am PC wieder anmelden.');
     if (pcStand.suche === false) return z('warn', 'Timocom-Suche nicht offen', 'Am PC ist in Timocom gerade keine Frachtsuche offen. Bitte die Suche öffnen und „Automatisch aktualisieren“ einschalten.');
     if (!pcStand.liste || pcStand.t - pcStand.liste > 5 * 60000) return z('warn', 'Timocom-Liste steht' + (pcStand.liste ? ' seit ' + uhrHM(pcStand.liste) : ''), 'Die Suchliste in Timocom aktualisiert sich am PC nicht mehr' + (pcStand.liste ? ' (zuletzt ' + uhrHM(pcStand.liste) + ' Uhr)' : '') + '. Bitte nachsehen: noch angemeldet? „Automatisch aktualisieren“ an? Tab noch offen?');
-    return z('ok', null, 'Alles läuft: Der Fracht-Wächter am PC hat sich um ' + uhrHM(zuletzt) + ' Uhr gemeldet, die Timocom-Liste kam um ' + uhrHM(pcStand.liste) + ' Uhr' + (pcStand.angebote ? ' (' + pcStand.angebote + ' Angebote)' : '') + '.' +
+    // ab Wächter 11.3: was in der letzten Stunde geprüft und gemeldet wurde – „läuft, aber nichts Passendes dabei“
+    const st = Array.isArray(pcStand.std) ? pcStand.std : null;
+    const stunde = !st ? '' : st[0] ? ' In der letzten Stunde hat er ' + st[0] + ' neue ' + (st[0] === 1 ? 'Angebot' : 'Angebote') + ' geprüft, ' +
+      (st[1] ? st[1] + ' davon gemeldet.' : 'keins davon hat gepasst.') : ' In der letzten Stunde kam kein neues Angebot in deine Listen.';
+    return z('ok', null, 'Alles läuft: Der Fracht-Wächter am PC hat sich um ' + uhrHM(zuletzt) + ' Uhr gemeldet, die Timocom-Liste kam um ' + uhrHM(pcStand.liste) + ' Uhr' + (pcStand.angebote ? ' (' + pcStand.angebote + ' Angebote)' : '') + '.' + stunde +
       (dienst ? '' : ' Touren meldet der Wächter nur in deiner Arbeitszeit (' + ab + '–' + bis + ' Uhr).'));
   }
   function standErklaeren() {
