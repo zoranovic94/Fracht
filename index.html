@@ -727,7 +727,9 @@ function angeboteAus(ereignisse) {
     if (e.event === 'message_delete') { weg.add(e.topic + '|' + sid); nachId.delete(e.topic + '|' + sid); return; }
     if (e.event !== 'message') return;
     const a = parseMeldung(e);
-    if (a && !weg.has(e.topic + '|' + sid)) nachId.set(e.topic + '|' + sid, a);
+    // Löschen gilt nur für ältere Fassungen: meldet der Wächter dieselbe Tour danach neu (gleiche Nummer, z. B. Preis geändert
+    // oder wieder in der Liste), erscheint sie wieder
+    if (a) { weg.delete(e.topic + '|' + sid); nachId.set(e.topic + '|' + sid, a); }
   });
   return Array.from(nachId.values());
 }
@@ -736,7 +738,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '6.6 (26.11.)';
+  const APP_VERSION = '6.7 (26.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
