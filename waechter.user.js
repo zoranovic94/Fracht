@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Timocom Fracht-Wächter (MZ Transport)
 // @namespace    https://www.mz-transport.de/
-// @version      12.3
+// @version      12.4
 // @description  Meldet neue, lohnende Frachten aus deiner Timocom-Suche per Push aufs Handy – mit Kostenrechnung, Zeitprüfung, Rückladungs-Check, Kontaktdaten und LKW-Position aus RIO.
 // @match        https://my.timocom.com/*
 // @match        https://iam.timocom.com/*
@@ -194,7 +194,7 @@
   function ntfyHeaders(h) { const t = ntfyToken(); return t ? Object.assign({ 'Authorization': 'Bearer ' + t }, h || {}) : (h || {}); }
   // 💚 Lebenszeichen für die Frachtradar-App (Kanal …-pc): Läuft der Wächter, ist Timocom angemeldet, kommt die Suchliste?
   // Die App zeigt danach „Live“ nur, wenn hier wirklich alles läuft – sonst „PC offline“, „Timocom abgemeldet“ oder „Liste steht“.
-  const WAECHTER_VERSION = '12.3';
+  const WAECHTER_VERSION = '12.4';
   const TAB_ID = Math.random().toString(36).slice(2, 8); // mehrere Timocom-Tabs auseinanderhalten
   function pcMelden(d) {
     if (!origFetch || CONFIG.TESTMODUS) return Promise.resolve(true);
@@ -2302,12 +2302,17 @@
     // Nur Ladungen, die zurück Richtung Heimat (Duisburg) gehen: nahe der Heimat enden oder mindestens halb so nah heranbringen
     const abKm = kmLuft(koord(ziel), heimPos());
     const richtig = alle.filter((z) => z && !z.deleted && richtungHeim(z, abKm));
-    // 📅 Nur Rückladungen zählen, die nach unserer Entladung erreichbar sind und spätestens ca. 1,5 Tage später abgeladen sind.
-    // Freitags heißt das: bis Samstag geliefert – eine Ladung, die erst Montag ankommt, lässt den LKW übers Wochenende stehen.
+    // 📅 Nur Rückladungen zählen, die der LKW nach unserer Entladung spätestens am nächsten Tag laden kann und die nicht
+    // übers Wochenende laufen: Mittwoch entladen → Donnerstag laden → Freitag abladen passt; Freitag entladen → erst Montag
+    // abladen passt nicht (der LKW stünde übers Wochenende).
     const zielK = koord(ziel);
+    const sonntagDazwischen = (von, bis) => { const d = new Date(von); d.setHours(0, 0, 0, 0); for (; d.getTime() <= bis; d.setDate(d.getDate() + 1)) if (d.getDay() === 0) return true; return false; };
     const zeilen = richtig.filter((z) => {
       if (ausschluss(z)) return false;
-      try { const b2 = bewerte(z, zielK, b.ende); return b2.machbar && b2.ende - b.ende <= 36 * STD; } catch (e) { return false; }
+      try {
+        const b2 = bewerte(z, zielK, b.ende);
+        return b2.machbar && b2.ankunftLaden - b.ende <= 30 * STD && !sonntagDazwischen(b.ende, b2.ende);
+      } catch (e) { return false; }
     });
     const wt = new Date(b.ende).getDay(), std = new Date(b.ende).getHours();
     const wochenende = (wt === 5 && std >= 10) || wt === 6 || wt === 0;
