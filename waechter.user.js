@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Timocom Fracht-Wächter (MZ Transport)
 // @namespace    https://www.mz-transport.de/
-// @version      12.4
+// @version      12.5
 // @description  Meldet neue, lohnende Frachten aus deiner Timocom-Suche per Push aufs Handy – mit Kostenrechnung, Zeitprüfung, Rückladungs-Check, Kontaktdaten und LKW-Position aus RIO.
 // @match        https://my.timocom.com/*
 // @match        https://iam.timocom.com/*
@@ -194,7 +194,7 @@
   function ntfyHeaders(h) { const t = ntfyToken(); return t ? Object.assign({ 'Authorization': 'Bearer ' + t }, h || {}) : (h || {}); }
   // 💚 Lebenszeichen für die Frachtradar-App (Kanal …-pc): Läuft der Wächter, ist Timocom angemeldet, kommt die Suchliste?
   // Die App zeigt danach „Live“ nur, wenn hier wirklich alles läuft – sonst „PC offline“, „Timocom abgemeldet“ oder „Liste steht“.
-  const WAECHTER_VERSION = '12.4';
+  const WAECHTER_VERSION = '12.5';
   const TAB_ID = Math.random().toString(36).slice(2, 8); // mehrere Timocom-Tabs auseinanderhalten
   function pcMelden(d) {
     if (!origFetch || CONFIG.TESTMODUS) return Promise.resolve(true);
@@ -2114,7 +2114,7 @@
     if (n && n.neuEingestellt) return 2; // ♻️ schon einmal gemeldet, nur neu eingestellt: still
     if (n && n.still) return 2; // nur neu bewertet (z. B. andere Farbe): still
     try {
-      if (istLaLie(n.b)) return 5;
+      if (istLaLie(n.b)) return n.b.deckung === null ? 4 : 5; // ☀️ heute La-Lie: LKW-Hupe nur mit Preis – 🔵 ohne Preis nur Hinweiston (Wunsch vom 27.11.)
       if (istMorgenLaLie(n.b)) return 4;
       // 🥇 Gold klingelt immer (Hinweiston), egal für welchen Tag – damit keine Top-Tour untergeht
       if (fa && fa === FARBEN.gold) return 4;

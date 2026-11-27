@@ -738,7 +738,7 @@ function angeboteAus(ereignisse) {
 
 <script>
 (function () {
-  const APP_VERSION = '6.7 (26.11.)';
+  const APP_VERSION = '6.8 (27.11.)';
   const $ = (id) => document.getElementById(id);
   const h = (tag, attrs, ...kinder) => {
     const el = document.createElement(tag);
@@ -1772,7 +1772,8 @@ function angeboteAus(ereignisse) {
       // Ton nur bei La-Lie: ☀️ Heute La-Lie (LKW-Signal) und 🌅 Morgen La-Lie (Hinweiston) – alles andere kommt still mit NEU
       // dazu 🥇 Gold, egal für welchen Tag (Hinweiston)
       const mitTon = frischDa.filter((a) => !a.knapp && !a.wieder && (istLaLie(a) || istMorgenLaLie(a) || a.farbe === 'gold' || a.farbe === 'gruen')); // 🟢 klingelt immer · 🤏 knapp und ♻️ neu eingestellt: still
-      if (mitTon.length && document.visibilityState === 'visible' && Date.now() - letzteSichtbareLadung < 120000) gong(mitTon.some(istLaLie));
+      // LKW-Hupe nur für heute La-Lie MIT Preis – 🔵 ohne Preis bekommt den Hinweiston
+      if (mitTon.length && document.visibilityState === 'visible' && Date.now() - letzteSichtbareLadung < 120000) gong(mitTon.some((a) => istLaLie(a) && a.preis != null));
       // Welche Tour hat geklingelt? Unten als Leiste zeigen und in der Liste markieren, bis du sie öffnest
       mitTon.forEach((a) => klingelIds.add(a.id));
       if (document.visibilityState === 'visible') letzteSichtbareLadung = Date.now();
